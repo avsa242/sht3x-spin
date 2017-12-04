@@ -71,47 +71,42 @@ PUB Main | i2c_cog, read[2], readtmp, i, data, crc, readcrc
     ser.Str (string("started on cog "))
     ser.Dec (i2c_cog)
     ser.NewLine
-'    debug.LEDFast ( GREEN)
   else
     ser.Str (string("failed - halting!", ser#NL))
     debug.LEDSlow (RED)
 
 
   ser.Str (string("Checking for SHT31 at $"))
-  ser.Hex ( SHT31_WR, 2)
+  ser.Hex ( SHT31_DEFAULT_ADDR, 2)
   ser.Str (string("..."))
 
   case i2c.present ( SHT31_DEFAULT_ADDR)
     TRUE:
       ser.Str (string("found", ser#NL))
-'      debug.LEDFast ( GREEN)
     OTHER:
       ser.Str (string("no response - halting", ser#NL))
       debug.LEDSlow ( RED)
 
-'  i2c.stop
 
   sht31_cmd( SHT31_CLEARSTATUS)
 
   time.MSleep (100)
 
-  waitforkey(string("Press key to reset...", ser#NL))
+'  waitforkey(string("Press key to reset...", ser#NL))
   sht31_soft_reset
 
   if sht31_status
     ser.Str (string("NAK"))
     debug.LEDSlow (RED)
-
+  
+  time.MSleep (100)
 '  i2c.stop
-  waitforkey(string("Press key to start reading...", ser#NL))
+'  waitforkey(string("Press key to start reading...", ser#NL))
   
   repeat
-    err
     sht31_bare
-    good
     time.MSleep (250)
-'    time.MSleep (333)
-'    time.MSleep (1000)
+
 PUB sht31_cmd(cmd) | ackbit
 
   if cmd
@@ -148,7 +143,7 @@ PUB sht31_bare | ackbit, i, readback[2], t, ttmp, read_t_crc, expected_t_crc, rh
 '  {P}i2c.stop
   repeat i from 0 to 5
   {R}readback.byte[i] := i2c.read (FALSE)
-  {P}i2c.stop
+  i2c.stop
   
   ttmp := (readback.byte[0] << 8) | readback.byte[1]
   read_t_crc := readback.byte[2]
@@ -163,8 +158,6 @@ PUB sht31_bare | ackbit, i, readback[2], t, ttmp, read_t_crc, expected_t_crc, rh
     ser.Char (" ")
   ser.NewLine
 
-'  ser.Hex (ttmp, 4)
-'  ser.Str (string(": "))
   case compare(read_t_crc, expected_t_crc)
     FALSE:
       err
@@ -221,15 +214,15 @@ PUB sht31_status | ackbit, i, readback, readcrc
   ackbit := i2c.write (SHT31_READSTATUS & $FF)
   if ackbit
     return FALSE
-  i2c.stop
+'  i2c.stop
   
   i2c.start
   ackbit := i2c.write (SHT31_RD)
-  i2c.stop
+'  i2c.stop
   if ackbit
     return FALSE
   repeat i from 0 to 2
-    readback.byte[2-i] := i2c.read (TRUE)
+    readback.byte[2-i] := i2c.read (FALSE)
   i2c.stop
   readcrc := crc8(readback >> 8, 2)
   if readcrc == readback.byte[0]
