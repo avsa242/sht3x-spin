@@ -50,7 +50,54 @@ VAR
 
   byte err_cnt
 
-PUB Main | i2c_cog, read[2], readtmp, i, data, crc, readcrc
+PUB Main | i
+
+  setup
+  
+  check_for_sht31
+  
+'  waitforkey (string("sht31_clearstatus", ser#NL))
+
+'  sht31_cmd( SHT31_CLEARSTATUS)
+  i2c.stop
+
+'  waitforkey(string("Press key to reset...", ser#NL))
+'  sht31_soft_reset
+
+'  waitforkey (string("sht31_status", ser#NL))
+
+'  repeat i from 1 to 3
+'    ser.Dec (i)
+'    ser.Str (string(" status read"))
+'  if sht31_status
+'    ser.Str (string("NAK"))
+'    debug.LEDSlow (RED)
+
+'  time.MSleep (100)
+'  i2c.stop
+'  waitforkey(string("Press key to start reading...", ser#NL))
+  
+  repeat
+    sht31_bare
+    time.MSleep (250)
+
+PUB sht31_cmd(cmd) | ackbit
+
+  if cmd
+    i2c.start
+    ackbit := i2c.write (SHT31_WR)
+    if ackbit
+      return FALSE
+    ackbit := i2c.write (cmd >> 8)
+    if ackbit
+      return FALSE
+    ackbit := i2c.write (cmd & $FF)
+    if ackbit
+      return FALSE
+  else
+    return FALSE
+
+PUB setup | i2c_cog
 
   ser.Start (115_200)
   ser.Clear
@@ -75,74 +122,46 @@ PUB Main | i2c_cog, read[2], readtmp, i, data, crc, readcrc
     ser.Str (string("failed - halting!", ser#NL))
     debug.LEDSlow (RED)
 
+PUB check_for_sht31 | status
 
   ser.Str (string("Checking for SHT31 at $"))
   ser.Hex ( SHT31_DEFAULT_ADDR, 2)
   ser.Str (string("..."))
 
-  case i2c.present ( SHT31_DEFAULT_ADDR)
+  status := i2c.present ( SHT31_DEFAULT_ADDR)
+  i2c.stop
+  case status
     TRUE:
       ser.Str (string("found", ser#NL))
     OTHER:
       ser.Str (string("no response - halting", ser#NL))
       debug.LEDSlow ( RED)
 
-
-  sht31_cmd( SHT31_CLEARSTATUS)
-
-  time.MSleep (100)
-
-'  waitforkey(string("Press key to reset...", ser#NL))
-  sht31_soft_reset
-
-  if sht31_status
-    ser.Str (string("NAK"))
-    debug.LEDSlow (RED)
-  
-  time.MSleep (100)
-'  i2c.stop
-'  waitforkey(string("Press key to start reading...", ser#NL))
-  
-  repeat
-    sht31_bare
-    time.MSleep (250)
-
-PUB sht31_cmd(cmd) | ackbit
-
-  if cmd
-    i2c.start
-    i2c.write (SHT31_WR)
-    if ackbit
-      return FALSE
-    i2c.write (cmd >> 8)
-    if ackbit
-      return FALSE
-    i2c.write (cmd & $FF)
-    if ackbit
-      return FALSE
-    i2c.stop
-  else
-    return FALSE
-
 PUB sht31_bare | ackbit, i, readback[2], t, ttmp, read_t_crc, expected_t_crc, rh, rhtmp, read_rh_crc, expected_rh_crc
 
 '  i2c.wait ( SHT31_WR)
-  {S}i2c.start
-  {A}ackbit := i2c.write ( SHT31_WR)
-  {M}ackbit := i2c.write ( SHT31_MEAS_HIGHREP >> 8)
-  {L}ackbit := i2c.write ( SHT31_MEAS_HIGHREP & $FF)
-  {P}i2c.stop
+  i2c.start
+  ackbit := i2c.write ( SHT31_WR)
+  ackbit := i2c.write ( SHT31_MEAS_HIGHREP >> 8)
+  ackbit := i2c.write ( SHT31_MEAS_HIGHREP & $FF)
+  i2c.stop
 
-  {S}i2c.start
-  {A}ackbit := i2c.write ( SHT31_RD)
-  {P}i2c.stop
-    if ackbit
-      return FALSE 'Don't bother reading if there's no data ready from the sensor
-'  {S}i2c.start
-'  {A}ackbit := i2c.write ( SHT31_RD)
-'  {P}i2c.stop
+  i2c.start
+  ackbit := i2c.write ( SHT31_RD)
+  i2c.stop
+
+  if ackbit
+    return FALSE 'Don't bother reading if there's no data ready from the sensor
+
+'  i2c.start
+'  ackbit := i2c.write ( SHT31_RD)
+'  i2c.stop
+
+'  if ackbit
+'    return FALSE 'Don't bother reading if there's no data ready from the sensor
+
   repeat i from 0 to 5
-  {R}readback.byte[i] := i2c.read (FALSE)
+    readback.byte[i] := i2c.read (FALSE)
   i2c.stop
   
   ttmp := (readback.byte[0] << 8) | readback.byte[1]
@@ -156,8 +175,15 @@ PUB sht31_bare | ackbit, i, readback[2], t, ttmp, read_t_crc, expected_t_crc, rh
   repeat i from 0 to 5
     ser.Hex (readback.byte[i], 2)
     ser.Char (" ")
-  ser.NewLine
 
+  ser.Str (string(" Temp: "))
+  t := -45 + 175 * ttmp / 65535
+  ser.Dec (t)
+  ser.Str (string("  RH: "))
+  rh := (100*rhtmp)/65535
+  ser.Dec (rh)
+  ser.NewLine
+    
   case compare(read_t_crc, expected_t_crc)
     FALSE:
       err
@@ -214,17 +240,22 @@ PUB sht31_status | ackbit, i, readback, readcrc
   ackbit := i2c.write (SHT31_READSTATUS & $FF)
   if ackbit
     return FALSE
-'  i2c.stop
+  i2c.stop
   
   i2c.start
   ackbit := i2c.write (SHT31_RD)
-'  i2c.stop
   if ackbit
     return FALSE
+  i2c.stop
+  
   repeat i from 0 to 2
     readback.byte[2-i] := i2c.read (FALSE)
   i2c.stop
-  readcrc := crc8(readback >> 8, 2)
+  ser.Hex (readback, 6)
+  ser.NewLine
+'  waitforkey (string("Read 3 bytes...", ser#NL))
+  
+  readcrc := crc8({readback >> 8}$0040 , 2)
   if readcrc == readback.byte[0]
     ser.Str (string("CRC GOOD - "))
   else
@@ -235,6 +266,7 @@ PUB sht31_status | ackbit, i, readback, readcrc
   ser.Str (string(": "))
   ser.Hex (readback, 6)
   ser.NewLine
+  waitforkey (string("Press any key", ser#NL))
 
 PUB sht31_read
 
