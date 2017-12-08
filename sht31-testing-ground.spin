@@ -33,10 +33,9 @@ CON
   SDA                         = 6
   BUS_RATE                    = 100_000'108_150'kHz/kbps
 
-  RED                         = 15
-  GREEN                       = 14
-  BLUE                        = 13
-  YELLOW                      = 12
+  REDLED                      = 15
+  GREENLED                    = 14
+  PIX_PIN                     = 13
   
 OBJ
 
@@ -45,10 +44,28 @@ OBJ
   time  : "time"
   i2c   : "jm_i2c_fast"
   debug : "debug"
+  math  : "math.float"
+  fs    : "string.float"
+  pix   : "jm_rgbx_pixel"
 
 VAR
 
   byte err_cnt
+  long pix_array
+
+  long comf_min
+  long comf_max
+  long comf_range
+ 
+  long cold_min
+  long cold_max
+  long cold_range
+
+  long hot_min
+  long hot_max
+  long hot_range
+  
+  long maxbright
 
 PUB Main | i
 
@@ -79,7 +96,7 @@ PUB Main | i
   
   repeat
     sht31_bare
-    time.MSleep (250)
+    time.MSleep (500)
 
 PUB sht31_cmd(cmd) | ackbit
 
@@ -99,11 +116,28 @@ PUB sht31_cmd(cmd) | ackbit
 
 PUB setup | i2c_cog
 
+  comf_min := 21_00             '"Comfortable" temperature limits
+  comf_max := 23_00
+  comf_range := comf_max - comf_min
+ 
+  cold_min := 10_00             '"Cold" temperature limits
+  cold_max := comf_min - 1      'Maximum uses minimum comfort limit to calc
+  cold_range := cold_max - cold_min
+
+  hot_min := comf_max + 1       '"Hot" temperature limits
+  hot_max := 25_00              'Minimum uses maximum comfort limit to calc
+  hot_range := hot_max - hot_min
+  
+  maxbright := 127
+
   ser.Start (115_200)
   ser.Clear
   
-  dira[YELLOW..RED] := 1
-  outa[YELLOW..RED] := 0
+  pix.start_2812 (@pix_array, 1, PIX_PIN, 10)
+  math.Start
+  fs.SetPrecision (4)
+  dira[GREENLED..REDLED] := 1
+  outa[GREENLED..REDLED] := 0
 
   ser.Clear
 
@@ -118,9 +152,10 @@ PUB setup | i2c_cog
     ser.Str (string("started on cog "))
     ser.Dec (i2c_cog)
     ser.NewLine
+    pix.set (0, pix.color (0, 64, 0, 0))
   else
     ser.Str (string("failed - halting!", ser#NL))
-    debug.LEDSlow (RED)
+    debug.LEDSlow (REDLED)
 
 PUB check_for_sht31 | status
 
@@ -135,9 +170,9 @@ PUB check_for_sht31 | status
       ser.Str (string("found", ser#NL))
     OTHER:
       ser.Str (string("no response - halting", ser#NL))
-      debug.LEDSlow ( RED)
+      debug.LEDSlow ( REDLED)
 
-PUB sht31_bare | ackbit, i, readback[2], t, ttmp, read_t_crc, expected_t_crc, rh, rhtmp, read_rh_crc, expected_rh_crc
+PUB sht31_bare | ackbit, i, readback[2], temp, itemp, ttmp, read_t_crc, expected_t_crc, rh, rhtmp, read_rh_crc, expected_rh_crc, red, green, blue
 
 '  i2c.wait ( SHT31_WR)
   i2c.start
@@ -150,15 +185,8 @@ PUB sht31_bare | ackbit, i, readback[2], t, ttmp, read_t_crc, expected_t_crc, rh
   ackbit := i2c.write ( SHT31_RD)
   i2c.stop
 
-  if ackbit
-    return FALSE 'Don't bother reading if there's no data ready from the sensor
-
-'  i2c.start
-'  ackbit := i2c.write ( SHT31_RD)
-'  i2c.stop
-
-'  if ackbit
-'    return FALSE 'Don't bother reading if there's no data ready from the sensor
+  if ackbit                                       'Don't bother reading if there's
+    return FALSE                                  ' no data ready from the sensor
 
   repeat i from 0 to 5
     readback.byte[i] := i2c.read (FALSE)
@@ -177,13 +205,50 @@ PUB sht31_bare | ackbit, i, readback[2], t, ttmp, read_t_crc, expected_t_crc, rh
     ser.Char (" ")
 
   ser.Str (string(" Temp: "))
-  t := -45 + 175 * ttmp / 65535
-  ser.Dec (t)
+  't := -45 + 175 * ttmp / 65535                'Integer version
+  'ser.Dec (t)
+
+  temp := math.MulF (175.0, math.FloatF (ttmp))    'FP version
+  temp := math.DivF (temp, 65535.0)
+  temp := math.AddF (temp, -45.0)
+  itemp := math.TruncUInt (math.MulF(temp, 100.0))
+  temp := fs.FloatToString (temp)
+  
+  ser.Str (temp)
   ser.Str (string("  RH: "))
-  rh := (100*rhtmp)/65535
-  ser.Dec (rh)
+  'rh := (100*rhtmp)/65535                      'Integer version
+  'ser.Dec (rh)
+  rh := math.MulF (100.0, math.FloatF (rhtmp))  'FP version
+  rh := math.DivF (rh, 65535.0)
+  rh := fs.FloatToString (rh)
+  ser.Str (rh)
   ser.NewLine
-    
+
+  ser.Dec (itemp)
+  ser.NewLine
+  case itemp
+    cold_min..cold_max:
+      red := 0
+      green := ((((itemp*1000)-(cold_min*1000)) / cold_range)*255)/1000
+      blue := 255-((((itemp*1000)-(cold_min*1000)) / cold_range)*255)/1000
+      ser.Str (string("COLD", ser#NL))
+    comf_min..comf_max:
+      blue := 0
+      red := 0
+      green := 255
+      ser.Str (string("COMF", ser#NL))
+    hot_min..hot_max:
+      red := ((((itemp*1000)-(hot_min*1000)) / hot_range)*255)/1000
+      green := 255-((((itemp*1000)-(hot_min*1000)) / hot_range)*255)/1000
+      blue := 0
+      ser.Str (string("HOT", ser#NL))
+    OTHER:
+      red := 0
+      green := 0
+      blue := 0
+      
+  pix.setx (0, pix.color (red, green, blue, 0), maxbright)
+ 
   case compare(read_t_crc, expected_t_crc)
     FALSE:
       err
@@ -253,9 +318,8 @@ PUB sht31_status | ackbit, i, readback, readcrc
   i2c.stop
   ser.Hex (readback, 6)
   ser.NewLine
-'  waitforkey (string("Read 3 bytes...", ser#NL))
-  
-  readcrc := crc8({readback >> 8}$0040 , 2)
+
+  readcrc := crc8(readback >> 8, 2)
   if readcrc == readback.byte[0]
     ser.Str (string("CRC GOOD - "))
   else
@@ -342,17 +406,17 @@ PUB crc8(data, len): crc | currbyte, i, j
 
 PUB err
 
-  dira[GREEN]~~
-  outa[GREEN]~
-  dira[RED]~~
-  outa[RED]~~
+  dira[GREENLED]~~
+  outa[GREENLED]~
+  dira[REDLED]~~
+  outa[REDLED]~~
   
 PUB good
 
-  dira[RED]~~
-  outa[RED]~
-  dira[GREEN]~~
-  outa[GREEN]~~
+  dira[REDLED]~~
+  outa[REDLED]~
+  dira[GREENLED]~~
+  outa[GREENLED]~~
 
 PUB waitforkey(message)
 
