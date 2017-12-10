@@ -46,26 +46,11 @@ OBJ
   debug : "debug"
   math  : "math.float"
   fs    : "string.float"
-  pix   : "jm_rgbx_pixel"
 
 VAR
 
   byte err_cnt
   long pix_array
-
-  long comf_min
-  long comf_max
-  long comf_range
- 
-  long cold_min
-  long cold_max
-  long cold_range
-
-  long hot_min
-  long hot_max
-  long hot_range
-  
-  long maxbright
 
 PUB Main | i
 
@@ -116,24 +101,9 @@ PUB sht31_cmd(cmd) | ackbit
 
 PUB setup | i2c_cog
 
-  comf_min := 21_00             '"Comfortable" temperature limits
-  comf_max := 23_00
-  comf_range := comf_max - comf_min
- 
-  cold_min := 10_00             '"Cold" temperature limits
-  cold_max := comf_min - 1      'Maximum uses minimum comfort limit to calc
-  cold_range := cold_max - cold_min
-
-  hot_min := comf_max + 1       '"Hot" temperature limits
-  hot_max := 25_00              'Minimum uses maximum comfort limit to calc
-  hot_range := hot_max - hot_min
-  
-  maxbright := 127
-
   ser.Start (115_200)
   ser.Clear
   
-  pix.start_2812 (@pix_array, 1, PIX_PIN, 10)
   math.Start
   fs.SetPrecision (4)
   dira[GREENLED..REDLED] := 1
@@ -152,7 +122,6 @@ PUB setup | i2c_cog
     ser.Str (string("started on cog "))
     ser.Dec (i2c_cog)
     ser.NewLine
-    pix.set (0, pix.color (0, 64, 0, 0))
   else
     ser.Str (string("failed - halting!", ser#NL))
     debug.LEDSlow (REDLED)
@@ -172,7 +141,7 @@ PUB check_for_sht31 | status
       ser.Str (string("no response - halting", ser#NL))
       debug.LEDSlow ( REDLED)
 
-PUB sht31_bare | ackbit, i, readback[2], temp, itemp, ttmp, read_t_crc, expected_t_crc, rh, rhtmp, read_rh_crc, expected_rh_crc, red, green, blue
+PUB sht31_bare | ackbit, i, readback[2], temp, ttmp, read_t_crc, expected_t_crc, rh, rhtmp, read_rh_crc, expected_rh_crc
 
 '  i2c.wait ( SHT31_WR)
   i2c.start
@@ -211,7 +180,6 @@ PUB sht31_bare | ackbit, i, readback[2], temp, itemp, ttmp, read_t_crc, expected
   temp := math.MulF (175.0, math.FloatF (ttmp))    'FP version
   temp := math.DivF (temp, 65535.0)
   temp := math.AddF (temp, -45.0)
-  itemp := math.TruncUInt (math.MulF(temp, 100.0))
   temp := fs.FloatToString (temp)
   
   ser.Str (temp)
@@ -224,31 +192,6 @@ PUB sht31_bare | ackbit, i, readback[2], temp, itemp, ttmp, read_t_crc, expected
   ser.Str (rh)
   ser.NewLine
 
-  ser.Dec (itemp)
-  ser.NewLine
-  case itemp
-    cold_min..cold_max:
-      red := 0
-      green := ((((itemp*1000)-(cold_min*1000)) / cold_range)*255)/1000
-      blue := 255-((((itemp*1000)-(cold_min*1000)) / cold_range)*255)/1000
-      ser.Str (string("COLD", ser#NL))
-    comf_min..comf_max:
-      blue := 0
-      red := 0
-      green := 255
-      ser.Str (string("COMF", ser#NL))
-    hot_min..hot_max:
-      red := ((((itemp*1000)-(hot_min*1000)) / hot_range)*255)/1000
-      green := 255-((((itemp*1000)-(hot_min*1000)) / hot_range)*255)/1000
-      blue := 0
-      ser.Str (string("HOT", ser#NL))
-    OTHER:
-      red := 0
-      green := 0
-      blue := 0
-      
-  pix.setx (0, pix.color (red, green, blue, 0), maxbright)
- 
   case compare(read_t_crc, expected_t_crc)
     FALSE:
       err
