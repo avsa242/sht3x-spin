@@ -15,6 +15,8 @@ CON
   SHT31_DEFAULT_ADDR          = $44 << 1
   SHT31_WR                    = SHT31_DEFAULT_ADDR
   SHT31_RD                    = SHT31_DEFAULT_ADDR + 1
+
+  CMD_READ_SERIALNBR          = $3780
   SHT31_MEAS_HIGHREP_STRETCH  = $2C06
   SHT31_MEAS_MEDREP_STRETCH   = $2C0D
   SHT31_MEAS_LOWREP_STRETCH   = $2C10
@@ -27,15 +29,16 @@ CON
   SHT31_HEATEREN              = $306D
   SHT31_HEATERDIS             = $3066
 
+
   POLYNOMIAL                  = $31
 
-  SCL                         = 7
-  SDA                         = 6
+  SCL                         = 8
+  SDA                         = 7
   BUS_RATE                    = 100_000'108_150'kHz/kbps
 
-  REDLED                      = 15
-  GREENLED                    = 14
-  PIX_PIN                     = 13
+  REDLED                      = 14'15
+  GREENLED                    = 13'14
+  PIX_PIN                     = 12'13
   
 OBJ
 
@@ -56,7 +59,6 @@ PUB Main | i
 
   setup
   
-  check_for_sht31
   
 '  waitforkey (string("sht31_clearstatus", ser#NL))
 
@@ -125,6 +127,8 @@ PUB setup | i2c_cog
   else
     ser.Str (string("failed - halting!", ser#NL))
     debug.LEDSlow (REDLED)
+  
+  check_for_sht31
 
 PUB check_for_sht31 | status
 
@@ -132,17 +136,26 @@ PUB check_for_sht31 | status
   ser.Hex ( SHT31_DEFAULT_ADDR, 2)
   ser.Str (string("..."))
 
-  status := i2c.present ( SHT31_DEFAULT_ADDR)
-  i2c.stop
+'  status := i2c.present ( SHT31_DEFAULT_ADDR)
+'  i2c.stop
+  status:=TRUE
   case status
     TRUE:
-      ser.Str (string("found", ser#NL))
+      ser.Str (string("found device with SN $"))
+      ser.Hex (read_sn, 6)
+      ser.NewLine
     OTHER:
       ser.Str (string("no response - halting", ser#NL))
       debug.LEDSlow ( REDLED)
 
 PUB sht31_bare | ackbit, i, readback[2], temp, ttmp, read_t_crc, expected_t_crc, rh, rhtmp, read_rh_crc, expected_rh_crc
-
+  '610BCA
+  '60FBBC
+  i2c.start
+  i2c.write ( SHT31_WR)
+  i2c.write ( SHT31_CLEARSTATUS >> 8)
+  i2c.write ( SHT31_CLEARSTATUS & $FF)
+  i2c.stop
 '  i2c.wait ( SHT31_WR)
   i2c.start
   ackbit := i2c.write ( SHT31_WR)
@@ -150,7 +163,7 @@ PUB sht31_bare | ackbit, i, readback[2], temp, ttmp, read_t_crc, expected_t_crc,
   ackbit := i2c.write ( SHT31_MEAS_HIGHREP & $FF)
   i2c.stop
 
-  i2c.start
+{  i2c.start
   ackbit := i2c.write ( SHT31_RD)
   i2c.stop
 
@@ -160,7 +173,8 @@ PUB sht31_bare | ackbit, i, readback[2], temp, ttmp, read_t_crc, expected_t_crc,
   repeat i from 0 to 5
     readback.byte[i] := i2c.read (FALSE)
   i2c.stop
-  
+}
+  readback := read_reg6
   ttmp := (readback.byte[0] << 8) | readback.byte[1]
   read_t_crc := readback.byte[2]
   expected_t_crc := crc8(@ttmp, 2)
@@ -169,10 +183,10 @@ PUB sht31_bare | ackbit, i, readback[2], temp, ttmp, read_t_crc, expected_t_crc,
   read_rh_crc := readback.byte[5]
   expected_rh_crc := crc8(@rhtmp, 2)
 
-  repeat i from 0 to 5
+{  repeat i from 0 to 5
     ser.Hex (readback.byte[i], 2)
     ser.Char (" ")
-
+}
   ser.Str (string(" Temp: "))
   't := -45 + 175 * ttmp / 65535                'Integer version
   'ser.Dec (t)
@@ -192,6 +206,8 @@ PUB sht31_bare | ackbit, i, readback[2], temp, ttmp, read_t_crc, expected_t_crc,
   ser.Str (rh)
   ser.NewLine
 
+'  sht31_status
+{  
   case compare(read_t_crc, expected_t_crc)
     FALSE:
       err
@@ -221,6 +237,55 @@ PUB sht31_bare | ackbit, i, readback[2], temp, ttmp, read_t_crc, expected_t_crc,
     ser.Str (string("Too many errors - soft reset", ser#NL))
     sht31_soft_reset
     time.MSleep (1000)
+}
+PUB read_sn : sn | i
+
+  i2c.start
+  i2c.write ( SHT31_WR)
+  i2c.write ( CMD_READ_SERIALNBR >> 8)
+  i2c.write ( CMD_READ_SERIALNBR & $FF)
+  i2c.stop
+  
+  i2c.start
+  i2c.write ( SHT31_RD)
+
+{ 
+  repeat i from 0 to 2
+    sn.byte[2-i] := i2c.read (FALSE)
+  i2c.stop
+}
+  sn := read_reg3
+  return
+
+PUB read_reg3 | ackbit, reg, reg_byte
+
+    i2c.start
+    ackbit := i2c.write (SHT31_RD)
+  
+    if ackbit
+      i2c.stop
+      return FALSE
+    
+    repeat reg_byte from 0 to 2
+      reg.byte[2-reg_byte] := i2c.read (FALSE)
+    i2c.stop
+    
+    return reg
+
+PUB read_reg6 | ackbit, reg, reg_byte
+
+    i2c.start
+    ackbit := i2c.write (SHT31_RD)
+  
+    if ackbit
+      i2c.stop
+      return FALSE
+    
+    repeat reg_byte from 0 to 5
+      reg.byte[5-reg_byte] := i2c.read (FALSE)
+    i2c.stop
+    
+    return reg
 
 PUB sht31_soft_reset | ackbit
 
@@ -236,33 +301,29 @@ PUB sht31_soft_reset | ackbit
     return false
   i2c.stop
 
-PUB sht31_status | ackbit, i, readback, readcrc
+PUB sht31_status : status | ackbit, i, readback, readcrc
 
   i2c.start
-  ackbit := i2c.write (SHT31_WR)
-  if ackbit
-    return FALSE
-  ackbit := i2c.write (SHT31_READSTATUS >> 8)
-  if ackbit
-    return FALSE
-  ackbit := i2c.write (SHT31_READSTATUS & $FF)
-  if ackbit
-    return FALSE
+  i2c.write (SHT31_WR)
+  i2c.write (SHT31_READSTATUS >> 8)
+  i2c.write (SHT31_READSTATUS & $FF)
   i2c.stop
   
   i2c.start
-  ackbit := i2c.write (SHT31_RD)
-  if ackbit
-    return FALSE
-  i2c.stop
+  i2c.write (SHT31_RD)
+'  i2c.stop
   
   repeat i from 0 to 2
-    readback.byte[2-i] := i2c.read (FALSE)
+    status.byte[2-i] := i2c.read (FALSE)
   i2c.stop
-  ser.Hex (readback, 6)
-  ser.NewLine
-
-  readcrc := crc8(readback >> 8, 2)
+  
+  return status
+'  ser.Hex (readback, 6)
+'  ser.NewLine
+'  ser.Hex (readback >> 8, 4)
+'  ser.NewLine
+'  ser.CharIn
+{  readcrc := crc8(readback >> 8, 2)
   if readcrc == readback.byte[0]
     ser.Str (string("CRC GOOD - "))
   else
@@ -273,8 +334,8 @@ PUB sht31_status | ackbit, i, readback, readcrc
   ser.Str (string(": "))
   ser.Hex (readback, 6)
   ser.NewLine
-  waitforkey (string("Press any key", ser#NL))
-
+'  waitforkey (string("Press any key", ser#NL))
+}
 PUB sht31_read
 
   i2c.start
