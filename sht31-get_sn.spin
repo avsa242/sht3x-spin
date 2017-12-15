@@ -91,7 +91,7 @@ PUB setup | i2c_cog
     ser.Str (string("failed - halting!", ser#NL))
     debug.LEDSlow (REDLED)
   
-PUB get_sn | ackbit, i, readback, readcrc, sn
+PUB get_sn | ackbit, i, readback, readcrc, sn_tmp, snh, snl, sn, crch, crcl
 '00A4185F
   i2c.start
   ackbit := i2c.write (SHT31_WR)
@@ -112,25 +112,60 @@ PUB get_sn | ackbit, i, readback, readcrc, sn
   if ackbit
     return FALSE
     
-{  repeat i from 0 to 3
-    sn.byte[3-i] := i2c.read (FALSE)
-    'ackbit := ser.Hex (i2c.read(FALSE), 2)
-    ser.NewLine
-    ser.Str (string("ackbit: "))
-    ser.Dec (ackbit)
-    if ackbit
-      abort
-}
-  sn.byte[3] := i2c.read (FALSE)
+  repeat i from 0 to 2
+    snh.byte[2-i] := i2c.read (FALSE)
+  i2c.stop
+
+  repeat i from 0 to 2
+    snl.byte[2-i] := i2c.read (FALSE)
+  i2c.stop
+
+  ser.Hex (snh, 6)
+  crch := snh & $FF
+  snh >>= 8
+  ser.Str (string(" ("))
+  ser.Hex (crc8(@snh, 2), 2)
+  ser.Str (string(")", ser#NL))
+
+  ser.Hex (snl, 6)
+  crcl := snl & $FF
+  snl >>= 8
+  ser.Str (string(" ("))
+  ser.Hex (crc8(@snl, 2), 2)
+  ser.Str (string(")", ser#NL))
+
+  {repeat i from 5 to 0
+    ser.Hex (sn.byte[i], 2)
+  
+  ser.Chars (" ", 5)
+  ser.Hex (crc8(@sn, 2), 2)
+  ser.Chars (" ", 5)
+  ser.Hex (crc8($185F, 2), 2)
+  }
+{  sn.byte[3] := i2c.read (FALSE) '00A4185F
   sn.byte[2] := i2c.read (FALSE)
-  i2c.read (FALSE)
+  e_crc_m := i2c.read (FALSE)
   sn.byte[1] := i2c.read (FALSE)
   sn.byte[0] := i2c.read (FALSE)
-  i2c.read (TRUE)
+  e_crc_l := i2c.read (TRUE)
   i2c.stop
- 
+'  a_crc_m := crc8(sn>>8, 2)
+'  a_crc_l := crc8(sn&$FF, 2)
+  
+  a_crc_m := crc8($00A4, 2)
+  a_crc_l := crc8($185F, 2)
   ser.NewLine
   ser.Hex (sn, 8)
+  ser.Str (string(" (expected MSW CRC "))
+  ser.Hex (e_crc_m, 2)
+  ser.Str (string(", got CRC "))
+  ser.Hex (a_crc_m, 2)
+  ser.NewLine
+  ser.Str (string(" (expected LSW CRC "))
+  ser.Hex (e_crc_l, 2)
+  ser.Str (string(", got CRC "))
+  ser.Hex (a_crc_l, 2)
+  }
   ser.NewLine
 '  return sn
 
@@ -138,11 +173,11 @@ PUB compare(b1, b2) | c
 
   return b1 == b2
 
-PUB crc8(data, len): crc | currbyte, i, j
+PUB crc8(ptr_data, len): crc | currbyte, i, j
 
   crc := $FF                                      'Initialize CRC with $FF
   repeat j from 0 to len-1
-    currbyte := byte[data][(len-1)-j]             'Byte 'retrieval' is done reverse of the loop because bytes are organized LSB-first
+    currbyte := byte[ptr_data][(len-1)-j]             'Byte 'retrieval' is done reverse of the loop because bytes are organized LSB-first
     crc := crc ^ currbyte
 
     repeat i from 1 to 8
