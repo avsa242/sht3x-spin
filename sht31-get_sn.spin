@@ -13,8 +13,10 @@ CON
   _xinfreq = cfg#_xinfreq
 
   SHT31_DEFAULT_ADDR          = $44 << 1
-  SHT31_WR                    = SHT31_DEFAULT_ADDR
-  SHT31_RD                    = SHT31_DEFAULT_ADDR + 1
+  WRITE_BIT                   = %0000_0000
+  READ_BIT                    = %0000_0001
+  SHT31_WR                    = SHT31_DEFAULT_ADDR | WRITE_BIT
+  SHT31_RD                    = SHT31_DEFAULT_ADDR | READ_BIT
 
   CMD_READ_SERIALNBR          = $3780
   SHT31_MEAS_HIGHREP_STRETCH  = $2C06
@@ -36,10 +38,6 @@ CON
   SDA                         = 7
   BUS_RATE                    = 100_000'108_150'kHz/kbps
 
-  REDLED                      = 14'15
-  GREENLED                    = 13'14
-  PIX_PIN                     = 12'13
-  
 OBJ
 
   cfg   : "config.propboe"
@@ -47,19 +45,11 @@ OBJ
   time  : "time"
   i2c   : "jm_i2c_fast"
   debug : "debug"
-  math  : "math.float"
-  fs    : "string.float"
-
-VAR
-
-  byte err_cnt
-  long pix_array
 
 PUB Main | i
 
   setup
   time.MSleep (50)
-'  i2c.stop
 
   repeat
     get_sn
@@ -71,9 +61,6 @@ PUB setup | i2c_cog
   ser.Start (115_200)
   ser.Clear
   
-  math.Start
-  fs.SetPrecision (4)
-
   ser.Clear
 
   ser.Str (string("I2C Setup on SCL: "))
@@ -89,29 +76,39 @@ PUB setup | i2c_cog
     ser.NewLine
   else
     ser.Str (string("failed - halting!", ser#NL))
-    debug.LEDSlow (REDLED)
-  
-PUB get_sn | ackbit, i, readback, readcrc, sn_tmp, snh, snl, sn, crch, crcl
-'00A4185F
-  i2c.start
-  ackbit := i2c.write (SHT31_WR)
-  if ackbit
+    debug.LEDSlow (cfg#LED1)
+
+PUB cmd(cmd_word) | ackbit
+
+  if cmd_word
+    i2c.start
+    ackbit := i2c.write (SHT31_WR)
+    if ackbit
+      return FALSE
+    ackbit := i2c.write (cmd_word >> 8)
+    if ackbit
+      return FALSE
+    ackbit := i2c.write (cmd_word  & $FF)
+    if ackbit
+      return FALSE
+    i2c.stop
+  else
     return FALSE
-  ackbit := i2c.write (CMD_READ_SERIALNBR >> 8)
-  if ackbit
-    return FALSE
-  ackbit := i2c.write (CMD_READ_SERIALNBR & $FF)
-  if ackbit
-    return FALSE
-  i2c.stop
-  
+
+PUB read | ackbit
+
   i2c.start
   ackbit := i2c.write (SHT31_RD)
   i2c.stop
 
   if ackbit
     return FALSE
-    
+
+PUB get_sn | ackbit, i, snh, snl, sn, crch, crcl
+
+  cmd(CMD_READ_SERIALNBR)
+  read
+
   repeat i from 0 to 2
     snh.byte[2-i] := i2c.read (FALSE)
   i2c.stop
@@ -134,44 +131,7 @@ PUB get_sn | ackbit, i, readback, readcrc, sn_tmp, snh, snl, sn, crch, crcl
   ser.Hex (crc8(@snl, 2), 2)
   ser.Str (string(")", ser#NL))
 
-  {repeat i from 5 to 0
-    ser.Hex (sn.byte[i], 2)
-  
-  ser.Chars (" ", 5)
-  ser.Hex (crc8(@sn, 2), 2)
-  ser.Chars (" ", 5)
-  ser.Hex (crc8($185F, 2), 2)
-  }
-{  sn.byte[3] := i2c.read (FALSE) '00A4185F
-  sn.byte[2] := i2c.read (FALSE)
-  e_crc_m := i2c.read (FALSE)
-  sn.byte[1] := i2c.read (FALSE)
-  sn.byte[0] := i2c.read (FALSE)
-  e_crc_l := i2c.read (TRUE)
-  i2c.stop
-'  a_crc_m := crc8(sn>>8, 2)
-'  a_crc_l := crc8(sn&$FF, 2)
-  
-  a_crc_m := crc8($00A4, 2)
-  a_crc_l := crc8($185F, 2)
   ser.NewLine
-  ser.Hex (sn, 8)
-  ser.Str (string(" (expected MSW CRC "))
-  ser.Hex (e_crc_m, 2)
-  ser.Str (string(", got CRC "))
-  ser.Hex (a_crc_m, 2)
-  ser.NewLine
-  ser.Str (string(" (expected LSW CRC "))
-  ser.Hex (e_crc_l, 2)
-  ser.Str (string(", got CRC "))
-  ser.Hex (a_crc_l, 2)
-  }
-  ser.NewLine
-'  return sn
-
-PUB compare(b1, b2) | c
-
-  return b1 == b2
 
 PUB crc8(ptr_data, len): crc | currbyte, i, j
 
