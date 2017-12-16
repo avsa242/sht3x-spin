@@ -49,13 +49,16 @@ OBJ
 PUB Main | i
 
   setup
-  time.MSleep (50)
 
   repeat
     get_sn
     ser.NewLine
     time.MSleep (333)
-    
+
+PUB compare(b1, b2)
+
+  return b1 == b2
+
 PUB setup | i2c_cog
 
   ser.Start (115_200)
@@ -77,6 +80,7 @@ PUB setup | i2c_cog
   else
     ser.Str (string("failed - halting!", ser#NL))
     debug.LEDSlow (cfg#LED1)
+  time.MSleep (50)
 
 PUB cmd(cmd_word) | ackbit
 
@@ -95,7 +99,7 @@ PUB cmd(cmd_word) | ackbit
   else
     return FALSE
 
-PUB read | ackbit
+PUB start_read | ackbit
 
   i2c.start
   ackbit := i2c.write (SHT31_RD)
@@ -104,34 +108,51 @@ PUB read | ackbit
   if ackbit
     return FALSE
 
-PUB get_sn | ackbit, i, snh, snl, sn, crch, crcl
+PUB read6bytes | ackbit, i, read_data[2], ms_word, ls_word, ms_crc, ls_crc, data
+
+  start_read
+
+  i2c.pread (@read_data, 6, TRUE)
+  i2c.stop
+
+  repeat i from 0 to 5
+    case i
+      0..1:                           'MSB
+        ms_word.byte[1-i] := read_data.byte[i]
+      2:                              'CRC of MSB
+        ms_crc := read_data.byte[i]
+      3..4:                           'LSB
+        ls_word.byte[4-i] := read_data.byte[i]
+      5:                              'CRC of LSB
+        ls_crc := read_data.byte[i]
+  case compare(crc8(@ms_word, 2), ms_crc)
+    FALSE:
+      ser.Str (string("MSB CRC BAD! Got "))
+      ser.Hex (ms_crc, 2)
+      ser.Str (string(", expected "))
+      ser.Hex (crc8(ms_word, 2), 2)
+      ser.NewLine
+      return FALSE
+    OTHER:
+
+  case compare(crc8(@ls_word, 2), ls_crc)
+    FALSE:
+      ser.Str (string("LSB CRC BAD! Got "))
+      ser.Hex (ls_crc, 2)
+      ser.Str (string(", expected "))
+      ser.Hex (crc8(ls_word, 2), 2)
+      ser.NewLine
+      return FALSE
+    OTHER:
+
+  data := (ms_word << 16) | ls_word
+  return data
+
+PUB get_sn | ackbit, i, snh, snl, read_data[2], crch, crcl
 
   cmd(CMD_READ_SERIALNBR)
-  read
-
-  repeat i from 0 to 2
-    snh.byte[2-i] := i2c.read (FALSE)
-  i2c.stop
-
-  repeat i from 0 to 2
-    snl.byte[2-i] := i2c.read (FALSE)
-  i2c.stop
-
-  ser.Hex (snh, 6)
-  crch := snh & $FF
-  snh >>= 8
-  ser.Str (string(" ("))
-  ser.Hex (crc8(@snh, 2), 2)
-  ser.Str (string(")", ser#NL))
-
-  ser.Hex (snl, 6)
-  crcl := snl & $FF
-  snl >>= 8
-  ser.Str (string(" ("))
-  ser.Hex (crc8(@snl, 2), 2)
-  ser.Str (string(")", ser#NL))
-
-  ser.NewLine
+  read_data := read6bytes
+  ser.Hex (read_data, 8)
 
 PUB crc8(ptr_data, len): crc | currbyte, i, j
 
