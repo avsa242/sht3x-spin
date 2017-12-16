@@ -34,10 +34,8 @@ CON
 
   SCL                         = 8
   SDA                         = 7
-  BUS_RATE                    = 100_000'108_150'kHz/kbps
+  BUS_RATE                    = 112_400'kHz/kbps
 
-  REDLED                      = 14'15
-  GREENLED                    = 13'14
   PIX_PIN                     = 12'13
   
 OBJ
@@ -54,52 +52,161 @@ VAR
 
   byte err_cnt
   long pix_array
+  word temp_word
+  word rh_word
 
 PUB Main | i
 
   setup
   
-  
-'  waitforkey (string("sht31_clearstatus", ser#NL))
-
-'  sht31_cmd( SHT31_CLEARSTATUS)
-  i2c.stop
-
-'  waitforkey(string("Press key to reset...", ser#NL))
-'  sht31_soft_reset
-
-'  waitforkey (string("sht31_status", ser#NL))
-
-'  repeat i from 1 to 3
-'    ser.Dec (i)
-'    ser.Str (string(" status read"))
-'  if sht31_status
-'    ser.Str (string("NAK"))
-'    debug.LEDSlow (RED)
-
-'  time.MSleep (100)
-'  i2c.stop
-'  waitforkey(string("Press key to start reading...", ser#NL))
-  
   repeat
-    sht31_bare
-    time.MSleep (500)
+    read_t_rh
+    ser.NewLine
+    time.MSleep (333)
 
-PUB sht31_cmd(cmd) | ackbit
+PUB cmd(cmd_word) | ackbit
 
-  if cmd
+  if cmd_word
     i2c.start
     ackbit := i2c.write (SHT31_WR)
     if ackbit
       return FALSE
-    ackbit := i2c.write (cmd >> 8)
+    ackbit := i2c.write (cmd_word >> 8)
     if ackbit
       return FALSE
-    ackbit := i2c.write (cmd & $FF)
+    ackbit := i2c.write (cmd_word  & $FF)
     if ackbit
       return FALSE
+    i2c.stop
   else
     return FALSE
+
+PUB compare(b1, b2)
+
+  return b1 == b2
+
+PUB crc8(data, len): crc | currbyte, i, j
+
+  crc := $FF                                      'Initialize CRC with $FF
+  repeat j from 0 to len-1
+    currbyte := byte[data][(len-1)-j]             'Byte 'retrieval' is done reverse of the loop because bytes are organized LSB-first
+    crc := crc ^ currbyte
+
+    repeat i from 1 to 8
+      if (crc & $80)
+        crc := (crc << 1) ^ POLYNOMIAL
+      else
+        crc := (crc << 1)
+  crc := crc ^ $00
+  crc &= $FF
+
+PUB get_sn | read_data
+
+  cmd(CMD_READ_SERIALNBR)
+  read_data := read6bytes
+  ser.Hex (read_data, 8)
+
+PUB get_t_rh | read_data, ttmp, rhtmp, temp, rh
+
+  cmd(SHT31_MEAS_HIGHREP)
+  read_data := read6bytes
+  temp_word := (read_data.byte[3] << 8) | read_data.byte[2]
+  rh_word := (read_data.byte[1] << 8) | read_data.byte[0]
+
+  return read_data
+
+PUB read_t | read_data, ttmp, temp
+
+  get_t_rh
+
+  ser.Str (string("Temp: "))
+  't := -45 + 175 * ttmp / 65535                'Integer version
+  'ser.Dec (t)
+  '175.0f * (ft)rawValue / 65535.0f - 45.0f;
+
+  temp := math.MulF (175.0, math.FloatF (temp_word))    'FP version
+  temp := math.DivF (temp, 65535.0)
+  temp := math.SubF (temp, 45.0)
+  temp := fs.FloatToString (temp)
+
+  ser.Str (temp)
+
+PUB read_rh | read_data, rhtmp, rh
+
+  get_t_rh
+
+  ser.Str (string("RH: "))
+  'rh := (100*rhtmp)/65535                      'Integer version
+  'ser.Dec (rh)
+  rh := math.MulF (100.0, math.FloatF (rh_word))  'FP version
+  rh := math.DivF (rh, 65535.0)
+  rh := fs.FloatToString (rh)
+  ser.Str (rh)
+  ser.NewLine
+
+PUB read_t_rh | read_data, ttmp, temp, rhtmp, rh
+
+  get_t_rh
+  ser.Str (string("Temp: "))
+  't := -45 + 175 * ttmp / 65535                'Integer version
+  'ser.Dec (t)
+
+  temp := math.MulF (175.0, math.FloatF (temp_word))    'FP version
+  temp := math.DivF (temp, 65535.0)
+  temp := math.AddF (temp, -45.0)
+  temp := fs.FloatToString (temp)
+
+  ser.Str (temp)
+
+  rhtmp := (read_data.byte[1] << 8) | read_data.byte[0]
+
+  ser.Str (string(" RH: "))
+  'rh := (100*rhtmp)/65535                      'Integer version
+  'ser.Dec (rh)
+  rh := math.MulF (100.0, math.FloatF (rh_word))  'FP version
+  rh := math.DivF (rh, 65535.0)
+  rh := fs.FloatToString (rh)
+  ser.Str (rh)
+
+PUB read6bytes | ackbit, i, read_data[2], ms_word, ls_word, ms_crc, ls_crc, data
+
+  start_read
+
+  i2c.pread (@read_data, 6, TRUE)
+  i2c.stop
+
+  repeat i from 0 to 5
+    case i
+      0..1:                           'MSB
+        ms_word.byte[1-i] := read_data.byte[i]
+      2:                              'CRC of MSB
+        ms_crc := read_data.byte[i]
+      3..4:                           'LSB
+        ls_word.byte[4-i] := read_data.byte[i]
+      5:                              'CRC of LSB
+        ls_crc := read_data.byte[i]
+  case compare(crc8(@ms_word, 2), ms_crc)
+    FALSE:
+      ser.Str (string("MSB CRC BAD! Got "))
+      ser.Hex (ms_crc, 2)
+      ser.Str (string(", expected "))
+      ser.Hex (crc8(ms_word, 2), 2)
+      ser.NewLine
+      return FALSE
+    OTHER:
+
+  case compare(crc8(@ls_word, 2), ls_crc)
+    FALSE:
+      ser.Str (string("LSB CRC BAD! Got "))
+      ser.Hex (ls_crc, 2)
+      ser.Str (string(", expected "))
+      ser.Hex (crc8(ls_word, 2), 2)
+      ser.NewLine
+      return FALSE
+    OTHER:
+
+  data := (ms_word << 16) | ls_word
+  return data
 
 PUB setup | i2c_cog
 
@@ -108,8 +215,6 @@ PUB setup | i2c_cog
   
   math.Start
   fs.SetPrecision (4)
-  dira[GREENLED..REDLED] := 1
-  outa[GREENLED..REDLED] := 0
 
   ser.Clear
 
@@ -126,9 +231,17 @@ PUB setup | i2c_cog
     ser.NewLine
   else
     ser.Str (string("failed - halting!", ser#NL))
-    debug.LEDSlow (REDLED)
-  
-  check_for_sht31
+    debug.LEDSlow (cfg#LED1)
+  time.MSleep (50)
+
+PUB start_read | ackbit
+
+  i2c.start
+  ackbit := i2c.write (SHT31_RD)
+  i2c.stop
+
+  if ackbit
+    return FALSE
 
 PUB check_for_sht31 | status
 
@@ -146,98 +259,8 @@ PUB check_for_sht31 | status
       ser.NewLine
     OTHER:
       ser.Str (string("no response - halting", ser#NL))
-      debug.LEDSlow ( REDLED)
+      debug.LEDSlow ( cfg#LED1)
 
-PUB sht31_bare | ackbit, i, readback[2], temp, ttmp, read_t_crc, expected_t_crc, rh, rhtmp, read_rh_crc, expected_rh_crc
-  '610BCA
-  '60FBBC
-  i2c.start
-  i2c.write ( SHT31_WR)
-  i2c.write ( SHT31_CLEARSTATUS >> 8)
-  i2c.write ( SHT31_CLEARSTATUS & $FF)
-  i2c.stop
-'  i2c.wait ( SHT31_WR)
-  i2c.start
-  ackbit := i2c.write ( SHT31_WR)
-  ackbit := i2c.write ( SHT31_MEAS_HIGHREP >> 8)
-  ackbit := i2c.write ( SHT31_MEAS_HIGHREP & $FF)
-  i2c.stop
-
-{  i2c.start
-  ackbit := i2c.write ( SHT31_RD)
-  i2c.stop
-
-  if ackbit                                       'Don't bother reading if there's
-    return FALSE                                  ' no data ready from the sensor
-
-  repeat i from 0 to 5
-    readback.byte[i] := i2c.read (FALSE)
-  i2c.stop
-}
-  readback := read_reg6
-  ttmp := (readback.byte[0] << 8) | readback.byte[1]
-  read_t_crc := readback.byte[2]
-  expected_t_crc := crc8(@ttmp, 2)
-
-  rhtmp := (readback.byte[3] << 8) | readback.byte[4]
-  read_rh_crc := readback.byte[5]
-  expected_rh_crc := crc8(@rhtmp, 2)
-
-{  repeat i from 0 to 5
-    ser.Hex (readback.byte[i], 2)
-    ser.Char (" ")
-}
-  ser.Str (string(" Temp: "))
-  't := -45 + 175 * ttmp / 65535                'Integer version
-  'ser.Dec (t)
-
-  temp := math.MulF (175.0, math.FloatF (ttmp))    'FP version
-  temp := math.DivF (temp, 65535.0)
-  temp := math.AddF (temp, -45.0)
-  temp := fs.FloatToString (temp)
-  
-  ser.Str (temp)
-  ser.Str (string("  RH: "))
-  'rh := (100*rhtmp)/65535                      'Integer version
-  'ser.Dec (rh)
-  rh := math.MulF (100.0, math.FloatF (rhtmp))  'FP version
-  rh := math.DivF (rh, 65535.0)
-  rh := fs.FloatToString (rh)
-  ser.Str (rh)
-  ser.NewLine
-
-'  sht31_status
-{  
-  case compare(read_t_crc, expected_t_crc)
-    FALSE:
-      err
-      err_cnt++
-      ser.Str (string("Bad Temp CRC - Got "))
-      ser.Hex (read_t_crc, 2)
-      ser.Str (string(", expected "))
-      ser.Hex (expected_t_crc, 2)
-      ser.NewLine
-    OTHER:
-      good
-
-  case compare(read_rh_crc, expected_rh_crc)
-    FALSE:
-      err
-      err_cnt++
-      ser.Str (string("Bad RH CRC - Got "))
-      ser.Hex (read_rh_crc, 2)
-      ser.Str (string(", expected "))
-      ser.Hex (expected_rh_crc, 2)
-      ser.NewLine
-    OTHER:
-      good
-
-  if err_cnt >50
-    err_cnt := 0
-    ser.Str (string("Too many errors - soft reset", ser#NL))
-    sht31_soft_reset
-    time.MSleep (1000)
-}
 PUB read_sn : sn | i
 
   i2c.start
@@ -336,11 +359,6 @@ PUB sht31_status : status | ackbit, i, readback, readcrc
   ser.NewLine
 '  waitforkey (string("Press any key", ser#NL))
 }
-PUB sht31_read
-
-  i2c.start
-  i2c.write (SHT31_RD)
-  i2c.stop
 
 {PUB sht31_status(data) | alert, heater, rh_track, t_track, sysres, cmd_status, wr_check
 
@@ -389,39 +407,6 @@ Bit - Field Description
   cmd_status := data >> 1
   wr_check := data & %1
 }
-PUB compare(b1, b2) | c
-
-  return b1 == b2
-
-PUB crc8(data, len): crc | currbyte, i, j
-
-  crc := $FF                                      'Initialize CRC with $FF
-  repeat j from 0 to len-1
-    currbyte := byte[data][(len-1)-j]             'Byte 'retrieval' is done reverse of the loop because bytes are organized LSB-first
-    crc := crc ^ currbyte
-
-    repeat i from 1 to 8
-      if (crc & $80)
-        crc := (crc << 1) ^ POLYNOMIAL
-      else
-        crc := (crc << 1)
-  crc := crc ^ $00
-  crc &= $FF
-
-PUB err
-
-  dira[GREENLED]~~
-  outa[GREENLED]~
-  dira[REDLED]~~
-  outa[REDLED]~~
-  
-PUB good
-
-  dira[REDLED]~~
-  outa[REDLED]~
-  dira[GREENLED]~~
-  outa[GREENLED]~~
-
 PUB waitforkey(message)
 
   ser.Str (message)
