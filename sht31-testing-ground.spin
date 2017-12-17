@@ -50,7 +50,8 @@ OBJ
 
 VAR
 
-  byte err_cnt
+  long err_cnt
+  long trans_cnt
   long pix_array
   word temp_word
   word rh_word
@@ -80,7 +81,7 @@ PUB cmd(cmd_word) | ackbit, cmd_long, cmd_byte
   else
     return FALSE '564uS w/ACK, 544uS w/o ACK
 }
-
+{
   if cmd_word
     i2c.start
     ackbit := i2c.write (SHT31_WR)
@@ -95,6 +96,28 @@ PUB cmd(cmd_word) | ackbit, cmd_long, cmd_byte
     i2c.stop
   else
     return FALSE '530uS
+}
+  if cmd_word
+    cmd_long := (SHT31_WR << 16) | cmd_word
+    invert (@cmd_long)
+    i2c.start
+    ackbit := i2c.pwrite (@cmd_long, 3)
+    if ackbit
+      return FALSE
+    i2c.stop
+  else
+    return FALSE '360uS
+
+PUB invert(ptr) | i, tmp
+
+  repeat i from 0 to 2
+    tmp.byte[2-i] := byte[ptr][i]
+  bytemove(ptr, @tmp, 3)
+
+'  ser.NewLine
+'  ser.Str (string("tmp: "))
+'  ser.Hex (tmp, 6)
+'  ser.NewLine
 
 PUB compare(b1, b2)
 
@@ -182,6 +205,11 @@ PUB read_t_rh | read_data, ttmp, temp, rhtmp, rh
   rh := math.DivF (rh, 65535.0)
   rh := fs.FloatToString (rh)
   ser.Str (rh)
+  
+  ser.Str (string(" CRC Errors/Total transactions: "))
+  ser.Dec (err_cnt)
+  ser.Char ("/")
+  ser.Dec (trans_cnt)
 
 PUB read6bytes | ackbit, i, read_data[2], ms_word, ls_word, ms_crc, ls_crc, data
 
@@ -189,7 +217,7 @@ PUB read6bytes | ackbit, i, read_data[2], ms_word, ls_word, ms_crc, ls_crc, data
 
   i2c.pread (@read_data, 6, TRUE)
   i2c.stop
-
+  trans_cnt++
   repeat i from 0 to 5
     case i
       0..1:                           'MSB
@@ -200,6 +228,7 @@ PUB read6bytes | ackbit, i, read_data[2], ms_word, ls_word, ms_crc, ls_crc, data
         ls_word.byte[4-i] := read_data.byte[i]
       5:                              'CRC of LSB
         ls_crc := read_data.byte[i]
+
   case compare(crc8(@ms_word, 2), ms_crc)
     FALSE:
       ser.Str (string("MSB CRC BAD! Got "))
@@ -207,6 +236,7 @@ PUB read6bytes | ackbit, i, read_data[2], ms_word, ls_word, ms_crc, ls_crc, data
       ser.Str (string(", expected "))
       ser.Hex (crc8(ms_word, 2), 2)
       ser.NewLine
+      err_cnt++
       return FALSE
     OTHER:
 
@@ -217,6 +247,7 @@ PUB read6bytes | ackbit, i, read_data[2], ms_word, ls_word, ms_crc, ls_crc, data
       ser.Str (string(", expected "))
       ser.Hex (crc8(ls_word, 2), 2)
       ser.NewLine
+      err_cnt++
       return FALSE
     OTHER:
 
