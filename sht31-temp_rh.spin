@@ -57,7 +57,6 @@ PUB Main | i
 
   repeat
     get_t_rh
-    ser.NewLine
     time.MSleep (500)
 
 PUB sht31_cmd(cmd) | ackbit
@@ -119,13 +118,8 @@ PUB check_for_sht31 | status
       ser.Str (string("no response - halting", ser#NL))
       debug.LEDSlow ( cfg#LED1)
 
-PUB get_t_rh | ackbit, i, read_data[2], readback[2], temp, ttmp, read_t_crc, expected_t_crc, rh, rhtmp, read_rh_crc, expected_rh_crc
+PUB get_t_rh | ackbit, i, readback[2], temp, ttmp, read_t_crc, expected_t_crc, rh, rhtmp, read_rh_crc, expected_rh_crc
 
-  cmd( SHT31_MEAS_HIGHREP)
-  read_data := read6bytes
-  ser.Hex (read_data, 8)
-
-{
   i2c.start
   ackbit := i2c.write ( SHT31_WR)
   ackbit := i2c.write ( SHT31_MEAS_HIGHREP >> 8)
@@ -169,7 +163,7 @@ PUB get_t_rh | ackbit, i, read_data[2], readback[2], temp, ttmp, read_t_crc, exp
   rh := fs.FloatToString (rh)
   ser.Str (rh)
   ser.NewLine
-}
+
 PUB compare(b1, b2) | c
 
   return b1 == b2

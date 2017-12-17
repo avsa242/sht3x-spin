@@ -60,11 +60,26 @@ PUB Main | i
   setup
   
   repeat
+'    i2c.wait ( SHT31_WR)
     read_t_rh
     ser.NewLine
     time.MSleep (333)
 
-PUB cmd(cmd_word) | ackbit
+PUB cmd(cmd_word) | ackbit, cmd_long, cmd_byte
+
+{
+  if cmd_word
+    cmd_long := (SHT31_WR << 16) | cmd_word
+    i2c.start
+    repeat cmd_byte from 2 to 0
+      i2c.write (cmd_long.byte[cmd_byte])
+      ackbit := i2c.write (cmd_long.byte[cmd_byte])
+      if ackbit
+        return FALSE
+    i2c.stop
+  else
+    return FALSE '564uS w/ACK, 544uS w/o ACK
+}
 
   if cmd_word
     i2c.start
@@ -79,7 +94,7 @@ PUB cmd(cmd_word) | ackbit
       return FALSE
     i2c.stop
   else
-    return FALSE
+    return FALSE '530uS
 
 PUB compare(b1, b2)
 
