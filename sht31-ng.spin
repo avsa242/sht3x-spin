@@ -16,19 +16,25 @@ CON
   SHT31_WR                    = SHT31_DEFAULT_ADDR
   SHT31_RD                    = SHT31_DEFAULT_ADDR + 1
 
-  CMD_READ_SERIALNBR          = $3780
+  SHT31_BREAK_STOP            = $3093
+  SHT31_READ_SERIALNUM        = $3780
   SHT31_MEAS_HIGHREP_STRETCH  = $2C06
   SHT31_MEAS_MEDREP_STRETCH   = $2C0D
   SHT31_MEAS_LOWREP_STRETCH   = $2C10
+  SHT31_ART                   = $2B32
   SHT31_MEAS_HIGHREP          = $2400
   SHT31_MEAS_MEDREP           = $240B
   SHT31_MEAS_LOWREP           = $2416
+  SHT31_FETCHDATA             = $E000
   SHT31_READSTATUS            = $F32D
   SHT31_CLEARSTATUS           = $3041
   SHT31_SOFTRESET             = $30A2
   SHT31_HEATEREN              = $306D
   SHT31_HEATERDIS             = $3066
 
+  LOW                         = 0
+  MED                         = 1
+  HIGH                        = 2
 
   POLYNOMIAL                  = $31
 
@@ -58,71 +64,38 @@ VAR
   long _ackbit
   long _monitor_ack_stack[100]
   long _nak
+  word _scale
 
 PUB Main | i
 
   setup
+  ContinuousRead (4, LOW)
   
   repeat
-'    i2c.wait (SHT31_WR)
-'    read_t_rh
-'    ser.Hex (tv, 8)
+'    GetTempRH (LOW)
+    FetchData
     read_t_rh
     ser.NewLine
-    time.MSleep (333)
+    time.MSleep (100)
 
 PUB cmd(cmd_word) | ackbit, cmd_long, cmd_byte
 
-{
-  if cmd_word
-    cmd_long := (SHT31_WR << 16) | cmd_word
-    i2c.start
-    repeat cmd_byte from 2 to 0
-      i2c.write (cmd_long.byte[cmd_byte])
-      ackbit := i2c.write (cmd_long.byte[cmd_byte])
-      if ackbit
-        return FALSE
-    i2c.stop
-  else
-    return FALSE '564uS w/ACK, 544uS w/o ACK
-}
-{
-  if cmd_word
-    i2c.start
-    ackbit := i2c.write (SHT31_WR)
-    if ackbit
-      return FALSE
-    ackbit := i2c.write (cmd_word >> 8)
-    if ackbit
-      return FALSE
-    ackbit := i2c.write (cmd_word  & $FF)
-    if ackbit
-      return FALSE
-    i2c.stop
-  else
-    return FALSE '530uS
-}
   if cmd_word
     cmd_long := (SHT31_WR << 16) | cmd_word
     invert (@cmd_long)
     i2c.start
     ackbit := i2c.pwrite (@cmd_long, 3)
     if ackbit
-      return FALSE
+      abort FALSE
 '    i2c.stop
   else
-    return FALSE '360uS
+    abort FALSE '360uS
 
 PUB invert(ptr) | i, tmp
 
   repeat i from 0 to 2
     tmp.byte[2-i] := byte[ptr][i]
   bytemove(ptr, @tmp, 3)
-
-'  ser.NewLine
-'  ser.Str (string("tmp: "))
-'  ser.Hex (tmp, 6)
-'  ser.NewLine
 
 PUB compare(b1, b2)
 
@@ -145,40 +118,141 @@ PUB crc8(data, len): crc | currbyte, i, j
 
 PUB get_sn | read_data
 
-  cmd(CMD_READ_SERIALNBR)
+  cmd(SHT31_READ_SERIALNUM)
   read_data := read6bytes
   return read_data
 
-PUB tv:data | tcmd, i, read_data[2], ms_word, ms_crc, ls_word, ls_crc
+PUB GetTempRH(repeatability): tempword_rhword | check, read_data[2], ms_word, ms_crc, ls_word, ls_crc, meas_wait1, meas_wait2
+'Get Temperature and RH data from sensor
+'with repeatability level LOW, MED, HIGH
+  case repeatability              'Wait x uSec for measurement to complete
+    LOW:
+      meas_wait1 := 0
+      meas_wait2 := 2000
+      repeatability := SHT31_MEAS_LOWREP
+    MED:
+      meas_wait1 := 1000
+      meas_wait2 := 3000
+      repeatability := SHT31_MEAS_MEDREP
+    HIGH:
+      meas_wait1 := 3000
+      meas_wait2 := 9000
+      repeatability := SHT31_MEAS_HIGHREP
+    OTHER:                        'Default to low-repeatability
+      meas_wait1 := 0
+      meas_wait2 := 2000
+      repeatability := SHT31_MEAS_LOWREP
 
-  tcmd := (SHT31_WR << 16) | $0024
-
-  i2c.start                           {S}
-'  _ackbit := i2c.pwrite (@tcmd, 3)    {W, CMD M, CMD L}
-  _ackbit := i2c.write (SHT31_DEFAULT_ADDR)
-  _ackbit := i2c.write ($24)
-  _ackbit := i2c.write ($00)
-  i2c.stop                            {P}
-  time.USleep (3000)                  {Measurement ongoing}
-  i2c.start                           {S}
-  repeat
-    _ackbit := i2c.write (SHT31_RD)   {R}
-  until _ackbit                       {Sensor should respond NAK}
-  i2c.stop                            {P}
-  time.USleep (9000)                  {Measurement ongoing; completed}
+  cmd (repeatability)
+  time.USleep (meas_wait1)
   i2c.start
-  _ackbit := i2c.write (SHT31_RD)     {R}
-  i2c.pread (@read_data, 6, TRUE)     {Temp MSB, LSB, CRC, RH MSB, LSB, CRC}
-'  read_data.byte[0] := i2c.read (i2c#ACK)
-'  read_data.byte[1] := i2c.read (i2c#ACK)
-'  read_data.byte[2] := i2c.read (i2c#ACK)
-'  read_data.byte[3] := i2c.read (i2c#ACK)
-'  read_data.byte[4] := i2c.read (i2c#ACK)
-'  read_data.byte[5] := i2c.read (i2c#NAK)
-  i2c.stop                            {P}
+  repeat
+    check := i2c.write (SHT31_RD)
+  until check
+  i2c.stop
+  time.USleep (meas_wait2)
+  i2c.start
+  _ackbit := i2c.write (SHT31_RD)
+  i2c.pread (@read_data, 6, TRUE)
+  i2c.stop
   temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
   rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
-{
+  tempword_rhword := (temp_word << 16) | (rh_word)
+
+PUB Break
+'Stop Periodic Data Acquisition Mode
+  cmd(SHT31_BREAK_STOP)
+  i2c.stop
+
+PUB ContinuousRead(mps, repeatability) | cmdword 'UNTESTED
+
+  case mps
+    0:
+      mps := $20
+      case repeatability
+        LOW:
+          repeatability := $2F
+        MED:
+          repeatability := $24
+        HIGH:
+          repeatability := $32
+        OTHER:
+          repeatability := $2F
+    1:
+      mps := $21
+      case repeatability
+        LOW:
+          repeatability := $2D
+        MED:
+          repeatability := $26
+        HIGH:
+          repeatability := $30
+        OTHER:
+          repeatability := $2D
+    2:
+      mps := $22
+      case repeatability
+        LOW:
+          repeatability := $2B
+        MED:
+          repeatability := $20
+        HIGH:
+          repeatability := $36
+        OTHER:
+          repeatability := $2B
+    4:
+      mps := $23
+      case repeatability
+        LOW:
+          repeatability := $29
+        MED:
+          repeatability := $22
+        HIGH:
+          repeatability := $34
+        OTHER:
+          repeatability := $29
+    10:
+      mps := $27
+      case repeatability
+        LOW:
+          repeatability := $2A
+        MED:
+          repeatability := $21
+        HIGH:
+          repeatability := $37
+        OTHER:
+          repeatability := $2A
+    OTHER:
+      mps := $23
+      case repeatability
+        LOW:
+          repeatability := $29
+        MED:
+          repeatability := $22
+        HIGH:
+          repeatability := $34
+        OTHER:
+          repeatability := $29
+  cmdword := (mps << 16) | repeatability
+  cmd (cmdword)
+
+PUB FetchData: tempword_rhword | read_data[2], ms_word, ms_crc, ls_word, ls_crc 'UNTESTED
+'Get Temperature and RH data from sensor
+'with repeatability level LOW, MED, HIGH
+  cmd (SHT31_FETCHDATA)
+  i2c.start
+  _ackbit := i2c.write (SHT31_RD)
+  if _ackbit == i2c#NAK
+    i2c.stop                            'No Data available, stop
+    abort FALSE
+  i2c.pread (@read_data, 6, TRUE)
+  i2c.stop
+  temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
+  rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
+  tempword_rhword := (temp_word << 16) | (rh_word)
+
+PRI check_crc | i, ms_word, ms_crc, ls_word, ls_crc, read_data, data
+
   trans_cnt++
   repeat i from 0 to 5
     case i
@@ -212,78 +286,27 @@ PUB tv:data | tcmd, i, read_data[2], ms_word, ms_crc, ls_word, ls_crc
       ser.NewLine
       err_cnt++
       return FALSE
-    OTHER:}
+    OTHER:
   data := (ms_word << 16) | ls_word
   return data
 
-
-PUB get_t_rh | read_data, ttmp, rhtmp, temp, rh
-
-  cmd(SHT31_MEAS_HIGHREP)
-  read_data := read6bytes
-  temp_word := (read_data.byte[3] << 8) | read_data.byte[2]
-  rh_word := (read_data.byte[1] << 8) | read_data.byte[0]
-
-  return read_data
-
 PUB read_t | read_data, ttmp, temp
 
-'  get_t_rh
-  tv
   ser.Str (string("Temp: "))
-  't := -45 + 175 * ttmp / 65535                'Integer version
-  'ser.Dec (t)
-  '175.0f * (ft)rawValue / 65535.0f - 45.0f;
-
-  temp := math.MulF (175.0, math.FloatF (temp_word))    'FP version
-  temp := math.DivF (temp, 65535.0)
-  temp := math.SubF (temp, 45.0)
-  temp := fs.FloatToString (temp)
-
-  ser.Str (temp)
+  temp := ((175 * (temp_word * _scale)) / 65535)-(45 * _scale)                'Integer version*scale
+  ser.Dec (temp)
 
 PUB read_rh | read_data, rhtmp, rh
 
-'  get_t_rh
-  tv
   ser.Str (string("RH: "))
-  'rh := (100*rhtmp)/65535                      'Integer version
-  'ser.Dec (rh)
-  rh := math.MulF (100.0, math.FloatF (rh_word))  'FP version
-  rh := math.DivF (rh, 65535.0)
-  rh := fs.FloatToString (rh)
-  ser.Str (rh)
-  ser.NewLine
+  rh := (100 * (rh_word * _scale))/65535                      'Integer version
+  ser.Dec (rh)
 
 PUB read_t_rh | read_data, ttmp, temp, rhtmp, rh
 
-'  get_t_rh
-  tv
-  ser.Str (string("Temp: "))
-  't := -45 + 175 * ttmp / 65535                'Integer version
-  'ser.Dec (t)
-
-  temp := math.MulF (175.0, math.FloatF (temp_word))    'FP version
-  temp := math.DivF (temp, 65535.0)
-  temp := math.AddF (temp, -45.0)
-  temp := fs.FloatToString (temp)
-
-  ser.Str (temp)
-
-  rhtmp := (read_data.byte[1] << 8) | read_data.byte[0]
-
-  ser.Str (string(" RH: "))
-  'rh := (100*rhtmp)/65535                      'Integer version
-  'ser.Dec (rh)
-  rh := math.MulF (100.0, math.FloatF (rh_word))  'FP version
-  rh := math.DivF (rh, 65535.0)
-  rh := fs.FloatToString (rh)
-  ser.Str (rh)
-  
-  ser.Str (string(" CRC Errors/Total transactions: "))
-  ser.Dec (err_cnt)
-  ser.Char ("/")
-  ser.Dec (trans_cnt)
+  read_t
+  ser.Char (" ")
+  read_rh
 
 PUB read3bytes | ackbit, i, read_data, data_word, data_crc, data
 
@@ -363,6 +386,7 @@ PUB read6bytes | ackbit, i, read_data[2], ms_word, ls_word, ms_crc, ls_crc, data
 
 PUB setup | i2c_cog
 
+  _scale := 100
   ser.Start (115_200)
   ser.Clear
   
@@ -390,15 +414,6 @@ PUB setup | i2c_cog
   cognew(monitor_ack, @_monitor_ack_stack)
 '  check_for_sht31
 
-PUB start_read | ackbit
-
-  i2c.start
-  ackbit := i2c.write (SHT31_RD)
-'  i2c.stop
-
-  if ackbit
-    return FALSE
-
 PUB check_for_sht31 | status
 
   ser.Str (string("Checking for SHT31 at $"))
@@ -416,45 +431,33 @@ PUB check_for_sht31 | status
       ser.Str (string("no response - halting", ser#NL))
       debug.LEDSlow (cfg#LED1)
 
-PUB sht31_soft_reset | ackbit
+PUB SoftReset 'UNTESTED
 
   cmd (SHT31_SOFTRESET)
-
-PUB sht31_status : status | ackbit, i, readback, readcrc
-
-  i2c.start
-  i2c.write (SHT31_WR)
-  i2c.write (SHT31_READSTATUS >> 8)
-  i2c.write (SHT31_READSTATUS & $FF)
   i2c.stop
-  
+
+PUB SetHeater(bool__enabled)
+
+  case ||bool__enabled
+    TRUE:
+      cmd(SHT31_HEATEREN)
+    FALSE:
+      cmd(SHT31_HEATERDIS)
+    OTHER:
+      cmd(SHT31_HEATERDIS)
+    
+PUB GetStatus: status | ackbit, i, readback, readcrc
+
+  cmd (SHT31_READSTATUS)
   i2c.start
   i2c.write (SHT31_RD)
-'  i2c.stop
-  
-  repeat i from 0 to 2
-    status.byte[2-i] := i2c.read (FALSE)
+  i2c.pread (@readback, 3, TRUE)
   i2c.stop
-  
-  return status
-'  ser.Hex (readback, 6)
-'  ser.NewLine
-'  ser.Hex (readback >> 8, 4)
-'  ser.NewLine
-'  ser.CharIn
-{  readcrc := crc8(readback >> 8, 2)
-  if readcrc == readback.byte[0]
-    ser.Str (string("CRC GOOD - "))
+  readcrc := readback.byte[2]
+  if compare (readcrc, crc8(readback >> 8))
+    return status
   else
-    ser.Str (string("CRC BAD - "))
-  ser.Hex (readcrc, 2)
-  ser.Char ("/")
-  ser.Hex (readback.byte[0], 2)
-  ser.Str (string(": "))
-  ser.Hex (readback, 6)
-  ser.NewLine
-'  waitforkey (string("Press any key", ser#NL))
-}
+    abort FALSE
 
 {PUB sht31_status(data) | alert, heater, rh_track, t_track, sysres, cmd_status, wr_check
 
