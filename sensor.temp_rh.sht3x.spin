@@ -1,8 +1,8 @@
 {
     --------------------------------------------
-    Filename: sensor.temp_rh.sht31.spin
+    Filename: sensor.temp_rh.sht3x.spin
     Author: Jesse Burt
-    Description: Driver for Sensirion's SHT31 Temperature/RH Sensor
+    Description: Driver for Sensirion's SHT3X Temperature/RH Sensors
     Copyright (c) 2018
     See end of file for terms of use.
     --------------------------------------------
@@ -10,25 +10,25 @@
 
 CON
 
-  SHT31_ADDR_A                = $44 << 1                'ADDR Pin low (default)
-  SHT31_ADDR_B                = $45 << 1                'ADDR Pin pulled high
-  I2C_MAX_HZ                  = 1_000_000               'SHT31 supports I2C FM up to 1MHz
+  SHT3X_ADDR_A                = $44 << 1                'ADDR Pin low (default)
+  SHT3X_ADDR_B                = $45 << 1                'ADDR Pin pulled high
+  I2C_MAX_HZ                  = 1_000_000               'SHT3X supports I2C FM up to 1MHz
 
-  SHT31_BREAK_STOP            = $3093
-  SHT31_READ_SERIALNUM        = $3780
-  SHT31_MEAS_HIGHREP_STRETCH  = $2C06
-  SHT31_MEAS_MEDREP_STRETCH   = $2C0D
-  SHT31_MEAS_LOWREP_STRETCH   = $2C10
-  SHT31_ART                   = $2B32
-  SHT31_MEAS_HIGHREP          = $2400
-  SHT31_MEAS_MEDREP           = $240B
-  SHT31_MEAS_LOWREP           = $2416
-  SHT31_FETCHDATA             = $E000
-  SHT31_READSTATUS            = $F32D
-  SHT31_CLEARSTATUS           = $3041
-  SHT31_SOFTRESET             = $30A2
-  SHT31_HEATEREN              = $306D
-  SHT31_HEATERDIS             = $3066
+  SHT3X_BREAK_STOP            = $3093
+  SHT3X_READ_SERIALNUM        = $3780
+  SHT3X_MEAS_HIGHREP_STRETCH  = $2C06
+  SHT3X_MEAS_MEDREP_STRETCH   = $2C0D
+  SHT3X_MEAS_LOWREP_STRETCH   = $2C10
+  SHT3X_ART                   = $2B32
+  SHT3X_MEAS_HIGHREP          = $2400
+  SHT3X_MEAS_MEDREP           = $240B
+  SHT3X_MEAS_LOWREP           = $2416
+  SHT3X_FETCHDATA             = $E000
+  SHT3X_READSTATUS            = $F32D
+  SHT3X_CLEARSTATUS           = $3041
+  SHT3X_SOFTRESET             = $30A2
+  SHT3X_HEATEREN              = $306D
+  SHT3X_HEATERDIS             = $3066
 
   LOW                         = 0
   MED                         = 1
@@ -52,7 +52,7 @@ VAR
   word _scale
   long _i2c_cog
   long _i2c_scl, _i2c_sda, _i2c_addr, _reset, _alert
-  byte SHT31_ADDR, SHT31_WR, SHT31_RD
+  byte SHT3X_ADDR, SHT3X_WR, SHT3X_RD
   
 PUB Null
 'This is not a top-level object
@@ -68,20 +68,20 @@ PUB Start(I2C_SCL, I2C_SDA, I2C_HZ, I2C_ADDR, RESET, ALERT)
     abort FALSE
 
   case I2C_ADDR
-    SHT31_ADDR_A:                     'Factory default slave address
-      SHT31_ADDR := SHT31_ADDR_A
-      SHT31_WR := SHT31_ADDR
-      SHT31_RD := SHT31_ADDR | %1
+    SHT3X_ADDR_A:                     'Factory default slave address
+      SHT3X_ADDR := SHT3X_ADDR_A
+      SHT3X_WR := SHT3X_ADDR
+      SHT3X_RD := SHT3X_ADDR | %1
 
-    SHT31_ADDR_B:                     'Alternate slave address
-      SHT31_ADDR := SHT31_ADDR_B
-      SHT31_WR := SHT31_ADDR
-      SHT31_RD := SHT31_ADDR | %1
+    SHT3X_ADDR_B:                     'Alternate slave address
+      SHT3X_ADDR := SHT3X_ADDR_B
+      SHT3X_WR := SHT3X_ADDR
+      SHT3X_RD := SHT3X_ADDR | %1
 
     OTHER:                            'Default to factory-set slave address
-      SHT31_ADDR := SHT31_ADDR_A
-      SHT31_WR := SHT31_ADDR
-      SHT31_RD := SHT31_ADDR | %1
+      SHT3X_ADDR := SHT3X_ADDR_A
+      SHT3X_WR := SHT3X_ADDR
+      SHT3X_RD := SHT3X_ADDR | %1
 
   _scale := 100 <# 100                'Scale fixed-point math up by this factor
                                       'Calcs overflow if scaling to 1000, so limit to 100 (2 decimal places)
@@ -94,19 +94,13 @@ PUB Start(I2C_SCL, I2C_SDA, I2C_HZ, I2C_ADDR, RESET, ALERT)
 
 PUB Break
 'Stop Periodic Data Acquisition Mode
-  cmd(SHT31_BREAK_STOP)
+  cmd(SHT3X_BREAK_STOP)
   i2c.stop
 
-PUB check_for_sht31 | status
-
-'  status := i2c.present (SHT31_ADDR)
-'  i2c.stop
-  status := i2c.write (SHT31_ADDR)
-  case status
-    TRUE:
-      return TRUE
-    OTHER:
-      abort FALSE
+PUB ClearStatus
+'Clears bits 15, 11, 10, and 4 in the status register
+  cmd(SHT3X_CLEARSTATUS)
+  i2c.stop
 
 PUB ContinuousRead(mps, repeatability) | cmdword 'UNTESTED
 
@@ -183,28 +177,70 @@ PUB ContinuousRead(mps, repeatability) | cmdword 'UNTESTED
 PUB FetchData: tempword_rhword | read_data[2], ms_word, ms_crc, ls_word, ls_crc 'UNTESTED
 'Get Temperature and RH data from sensor
 'with repeatability level LOW, MED, HIGH
-  cmd (SHT31_FETCHDATA)
+  cmd (SHT3X_FETCHDATA)
   i2c.start
-  _ackbit := i2c.write (SHT31_RD)
+  _ackbit := i2c.write (SHT3X_RD)
   if _ackbit == i2c#NAK
     i2c.stop                            'No Data available, stop
-    abort FALSE
+    return FALSE
   i2c.pread (@read_data, 6, TRUE)
   i2c.stop
   temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
   rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
   tempword_rhword := (temp_word << 16) | (rh_word)
 
+
+PUB GetAlertStatus: alert_pending
+'Get Alert status
+' 0*- No alerts
+' 1 - at least one pending
+
+  return alert_pending := ((GetStatus >> 15) & %1) * -1
+
+PUB GetHeaterStatus: heater_enabled
+'Get Heater status
+' 0*- OFF
+' 1 - ON
+
+  return heater_enabled := ((GetStatus >> 13) & %1) * -1
+
+PUB GetLastCmdStatus: lastcmd_status
+'Command status
+' 0*- Last command executed successfully
+' 1 - Last command not processed. Invalid or failed integrated checksum
+
+  return lastcmd_status := ((GetStatus >> 1) & %1) * -1
+
+PUB GetLastCRCStatus: lastwritecrc_status
+'Write data checksum status
+' 0*- Checksum of last transfer was correct
+' 1 - Checksum of last transfer write failed
+
+  return lastwritecrc_status := (GetStatus & %1) * -1
+
+PUB GetResetStatus: reset_detected
+'Check for System Reset
+' 0 - No reset since last 'clear status register'
+' 1*- reset detected (hard reset, soft reset, power fail)
+
+  return reset_detected := ((GetStatus >> 4) & %1) * -1
+
 PUB GetRH: humidity | read_data, rhtmp, rh
 'Return Relative Humidity in hundreths of a percent
   return humidity := (100 * (rh_word * _scale)) / 65535
 
-PUB GetSN: long__serial_num | read_data[2], ms_word, ls_word, ms_crc, ls_crc 'UNTESTED
+PUB GetRHTrack_Alert: rhtrack_alert
+'RH Tracking Alert
+' 0 - No alert
+' 1 - Alert
+  return rhtrack_alert := (GetStatus >> 11) & %1
 
-  cmd(SHT31_READ_SERIALNUM)
+PUB GetSN: long__serial_num | read_data[2], ms_word, ls_word, ms_crc, ls_crc
+'Read 32bit serial number from SHT3x
+  cmd(SHT3X_READ_SERIALNUM)
   time.USleep (500)
   i2c.start
-  i2c.write (SHT31_RD)
+  i2c.write (SHT3X_RD)
   i2c.pread (@read_data, 6, TRUE)
   i2c.stop
 
@@ -215,99 +251,28 @@ PUB GetSN: long__serial_num | read_data[2], ms_word, ls_word, ms_crc, ls_crc 'UN
 
   if compare(crc8(@ms_word, 2), ms_crc) AND compare(crc8(@ls_word, 2), ls_crc)
     return long__serial_num := (ms_word << 16) | ls_word
+  else
+    return FALSE                                    'Return implausible value if CRC check failed
 
-PUB led(pin)
-
-  dira[pin] := 1
-  repeat
-    !outa[pin]
-    time.MSleep (100)
-
-PUB GetStatus: status | ackbit, i, readback, readcrc
-
-  cmd (SHT31_READSTATUS)
+PUB GetStatus: word__status | read_data, status_crc
+'Read SHT3x status register
+  cmd (SHT3X_READSTATUS)
   i2c.start
-  i2c.write (SHT31_RD)
-  i2c.pread (@readback, 3, TRUE)
+  i2c.write (SHT3X_RD)
+  i2c.pread (@read_data, 3, TRUE)
   i2c.stop
 
-  readcrc := readback.byte[2]
-  if compare (readcrc, crc8(readback >> 8, 3))
-    return status
+  word__status := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
+  status_crc := read_data.byte[2]
+  if compare (crc8(@word__status, 2), status_crc)
+    return word__status
   else
-    abort FALSE
-
-{
-Bit - Field Description
-
-15  - Alert
-      0*- No alerts
-      1 - at least one pending
-14  - Reserved
-
-13  - Heater status
-      0*- OFF
-      1 - ON
-12  - Reserved
-
-11  - RH Tracking alert
-      0*- No alert
-      1 - alert
-
-10  - T Tracking alert
-      0*- No alert
-      1 - alert
-
-9:5 - Reserved (xxxxx)
-
-4   - System Reset Detected
-      0 - No reset since last 'clear status register'
-      1*- reset detected (hard reset, soft reset, power fail)
-
-3:2 - Reserved (00)
-
-1   - Command status
-      0*- Last command executed successfully
-      1 - Last command not processed. Invalid or failed integrated checksum
-
-0   - Write data checksum status
-      0*- Checksum of last transfer was correct
-      1 - Checksum of last transfer write failed
-}
-
-
-PUB GetStatus_Alert: alert_pending
-
-  return alert_pending := (GetStatus >> 15) & %1
-  
-PUB GetStatus_Heater: heater_status
-
-  return heater_status := (GetStatus >> 13) & %1
-
-PUB GetStatus_RHT_Alert: rhtrack_alert
-
-  return rhtrack_alert := (GetStatus >> 11) & %1
-
-PUB GetStatus_TT_Alert: temptrack_alert
-
-  return temptrack_alert := (GetStatus >> 10) & %1
-
-PUB GetStatus_Reset: reset_detected
-
-  return reset_detected := (GetStatus >> 4) & %1
-
-PUB GetStatus_Cmd: lastcmd_status
-
-  return lastcmd_status := (GetStatus >> 1) & %1
-
-PUB GetStatus_CRCStatus: lastwritecrc_status
-
-  return lastwritecrc_status := (GetStatus & %1)
-
-PUB GetTemp_RH(ptr_temp, ptr_rh)
+    return $53EC                                    'Return invalid value if CRC check failed
+                                                    '(sets all 'Reserved' bits, which should normally be 0)
+PUB GetTemp_RH(ptr_word__temp, ptr_word__rh)
 'Return both Temperature and Humidity
-  long[ptr_temp] := GetTempC
-  long[ptr_rh] := GetRH
+  long[ptr_word__temp] := GetTempC
+  long[ptr_word__rh] := GetRH
 
 PUB GetTempC: temperature | read_data, ttmp, temp
 'Return temperature in hundreths of a degree Celsius
@@ -316,67 +281,79 @@ PUB GetTempC: temperature | read_data, ttmp, temp
 PUB GetTempRH(repeatability): tempword_rhword | check, read_data[2], ms_word, ms_crc, ls_word, ls_crc, meas_wait1, meas_wait2
 'Get Temperature and RH data from sensor
 'with repeatability level LOW, MED, HIGH
-  case repeatability              'Wait x uSec for measurement to complete
+  case repeatability                                'Wait x uSec for measurement to complete
     LOW:
       meas_wait1 := 500
       meas_wait2 := 2000
-      repeatability := SHT31_MEAS_LOWREP
+      repeatability := SHT3X_MEAS_LOWREP
     MED:
       meas_wait1 := 1500
       meas_wait2 := 3000
-      repeatability := SHT31_MEAS_MEDREP
+      repeatability := SHT3X_MEAS_MEDREP
     HIGH:
       meas_wait1 := 3500
       meas_wait2 := 9000
-      repeatability := SHT31_MEAS_HIGHREP
-    OTHER:                        'Default to low-repeatability
+      repeatability := SHT3X_MEAS_HIGHREP
+    OTHER:                                          'Default to low-repeatability
       meas_wait1 := 500
       meas_wait2 := 2000
-      repeatability := SHT31_MEAS_LOWREP
+      repeatability := SHT3X_MEAS_LOWREP
 
   cmd (repeatability)
   time.USleep (meas_wait1)
   i2c.start
   repeat
-    check := i2c.write (SHT31_RD)
+    check := i2c.write (SHT3X_RD)
   until check
   i2c.stop
   time.USleep (meas_wait2)
   i2c.start
-  _ackbit := i2c.write (SHT31_RD)
+  _ackbit := i2c.write (SHT3X_RD)
   i2c.pread (@read_data, 6, TRUE)
   i2c.stop
   temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
   rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
   tempword_rhword := (temp_word << 16) | (rh_word)
 
-PUB SetHeater(bool__enabled) 'UNTESTED
+PUB GetTempTrack_Alert: temptrack_alert
+'Temp Tracking Alert
+' 0 - No alert
+' 1 - Alert
+  return temptrack_alert := ((GetStatus >> 10) & %1) * -1
 
-  case ||bool__enabled
+PUB IsPresent: status
+'Polls I2C bus for SHT3x
+  status := i2c.present(SHT3X_ADDR)
+  return status
+
+PUB SetHeater(bool__enabled)
+'Enable/Disable built-in heater
+'(per SHT3x datasheet, it is for plausability checking only)
+  case bool__enabled
     TRUE:
-      cmd(SHT31_HEATEREN)
+      cmd(SHT3X_HEATEREN)
     FALSE:
-      cmd(SHT31_HEATERDIS)
+      cmd(SHT3X_HEATERDIS)
     OTHER:
-      cmd(SHT31_HEATERDIS)
+      cmd(SHT3X_HEATERDIS)
 
 PUB SoftReset 'UNTESTED
-
-  cmd (SHT31_SOFTRESET)
+'Perform Soft Reset. Bit 4 of status register should subsequently read 1
+  cmd (SHT3X_SOFTRESET)
   i2c.stop
   time.MSleep (50)
 
 PRI cmd(cmd_word) | ackbit, cmd_long, cmd_byte
 
   if cmd_word
-    cmd_long := (SHT31_WR << 16) | cmd_word
+    cmd_long := (SHT3X_WR << 16) | cmd_word
     invert (@cmd_long)
     i2c.start
     ackbit := i2c.pwrite (@cmd_long, 3)
     if ackbit
-      abort FALSE
+      return FALSE
   else
-    abort FALSE '360uS
+    return FALSE
 
 PRI compare(b1, b2)
 
@@ -402,82 +379,6 @@ PRI invert(ptr) | i, tmp
   repeat i from 0 to 2
     tmp.byte[2-i] := byte[ptr][i]
   bytemove(ptr, @tmp, 3)
-
-PRI read3bytes | ackbit, i, read_data, data_word, data_crc, data
-
-  i2c.start
-  ackbit := i2c.write (SHT31_RD)
-  if ackbit
-    return FALSE
-  i2c.pread (@read_data, 3, TRUE)
-  i2c.stop
-
-  trans_cnt++
-  repeat i from 0 to 2
-    case i
-      0..1:                           'Word
-        data_word.byte[1-i] := read_data.byte[i]
-      2:                              'CRC of word
-        data_crc := read_data.byte[i]
-
-  case compare(crc8(@data_word, 2), data_crc)
-    FALSE:
-'      ser.Str (string("CRC BAD! Got "))
-'      ser.Hex (data_crc, 2)
-'      ser.Str (string(", expected "))
-'      ser.Hex (crc8(data_word, 2), 2)
-'      ser.NewLine
-      err_cnt++
-      return FALSE
-    OTHER:
-
-  data := data_word
-  return data
-
-PRI read6bytes | ackbit, i, read_data[2], ms_word, ls_word, ms_crc, ls_crc, data
-
-  i2c.start
-  ackbit := i2c.write (SHT31_RD)
-  if ackbit
-    return FALSE
-  i2c.pread (@read_data, 6, TRUE)
-  i2c.stop
-  trans_cnt++
-  repeat i from 0 to 5
-    case i
-      0..1:                           'MSB
-        ms_word.byte[1-i] := read_data.byte[i]
-      2:                              'CRC of MSB
-        ms_crc := read_data.byte[i]
-      3..4:                           'LSB
-        ls_word.byte[4-i] := read_data.byte[i]
-      5:                              'CRC of LSB
-        ls_crc := read_data.byte[i]
-  ms_word &= $FFFF
-  ls_word &= $FFFF
-  case compare(crc8(@ms_word, 2), ms_crc)
-    FALSE:
-'      ser.Str (string("MSB CRC BAD! Got "))
-'      ser.Hex (ms_crc, 2)
-'      ser.Str (string(", expected "))
-'      ser.Hex (crc8(ms_word, 2), 2)
-'      ser.NewLine
-      err_cnt++
-      return FALSE
-    OTHER:
-
-  case compare(crc8(@ls_word, 2), ls_crc)
-    FALSE:
-'      ser.Str (string("LSB CRC BAD! Got "))
-'      ser.Hex (ls_crc, 2)
-'      ser.Str (string(", expected "))
-'      ser.Hex (crc8(ls_word, 2), 2)
-'      ser.NewLine
-      err_cnt++
-      return FALSE
-    OTHER:
-  data := (ms_word << 16) | ls_word
-  return data
 
 DAT
 {
