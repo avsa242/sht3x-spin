@@ -100,78 +100,6 @@ PUB ClearStatus
   cmd(SHT3X_CLEARSTATUS)
   i2c.stop
 
-PUB ContinuousRead(mps, repeatability) | cmdword 'UNTESTED
-
-  case mps
-    0:
-      mps := $20
-      case repeatability
-        LOW:
-          repeatability := $2F
-        MED:
-          repeatability := $24
-        HIGH:
-          repeatability := $32
-        OTHER:
-          repeatability := $2F
-    1:
-      mps := $21
-      case repeatability
-        LOW:
-          repeatability := $2D
-        MED:
-          repeatability := $26
-        HIGH:
-          repeatability := $30
-        OTHER:
-          repeatability := $2D
-    2:
-      mps := $22
-      case repeatability
-        LOW:
-          repeatability := $2B
-        MED:
-          repeatability := $20
-        HIGH:
-          repeatability := $36
-        OTHER:
-          repeatability := $2B
-    4:
-      mps := $23
-      case repeatability
-        LOW:
-          repeatability := $29
-        MED:
-          repeatability := $22
-        HIGH:
-          repeatability := $34
-        OTHER:
-          repeatability := $29
-    10:
-      mps := $27
-      case repeatability
-        LOW:
-          repeatability := $2A
-        MED:
-          repeatability := $21
-        HIGH:
-          repeatability := $37
-        OTHER:
-          repeatability := $2A
-    OTHER:
-      mps := $23
-      case repeatability
-        LOW:
-          repeatability := $29
-        MED:
-          repeatability := $22
-        HIGH:
-          repeatability := $34
-        OTHER:
-          repeatability := $29
-  cmdword := (mps << 16) | repeatability
-  cmd (cmdword)
-
 PUB FetchData: tempword_rhword | read_data[2], ms_word, ms_crc, ls_word, ls_crc 'UNTESTED
 'Get Temperature and RH data from sensor
 'with repeatability level LOW, MED, HIGH
@@ -183,8 +111,8 @@ PUB FetchData: tempword_rhword | read_data[2], ms_word, ms_crc, ls_word, ls_crc 
     return FALSE
   i2c.pread (@read_data, 6, TRUE)
   i2c.stop
- _temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
- _rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
+  _temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
+  _rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
   tempword_rhword := (_temp_word << 16) | (_rh_word)
 
 
@@ -274,7 +202,7 @@ PUB GetTemp_RH(ptr_word__temp, ptr_word__rh)
   long[ptr_word__rh] := GetRH
 
 PUB GetTempC: temperature | read_data, ttmp, temp
-'Return temperature in hundreths of a degree Celsius
+'Return temperature in hundredths of a degree Celsius
   return temperature := ((175 * (_temp_word * _scale)) / 65535)-(45 * _scale)
 
 PUB GetTempRH(repeatability): tempword_rhword | check, read_data[2], ms_word, ms_crc, ls_word, ls_crc, meas_wait1, meas_wait2
@@ -327,6 +255,79 @@ PUB IsPresent: status
 'Polls I2C bus for SHT3x
   status := i2c.present(SHT3X_ADDR)
   return status
+
+PUB PeriodicRead(mps, repeatability) | cmdword 'UNTESTED
+
+  case mps
+    0:
+      mps := $20
+      case repeatability
+        LOW:
+          repeatability := $2F
+        MED:
+          repeatability := $24
+        HIGH:
+          repeatability := $32
+        OTHER:
+          repeatability := $2F
+    1:
+      mps := $21
+      case repeatability
+        LOW:
+          repeatability := $2D
+        MED:
+          repeatability := $26
+        HIGH:
+          repeatability := $30
+        OTHER:
+          repeatability := $2D
+    2:
+      mps := $22
+      case repeatability
+        LOW:
+          repeatability := $2B
+        MED:
+          repeatability := $20
+        HIGH:
+          repeatability := $36
+        OTHER:
+          repeatability := $2B
+    4:
+      mps := $23
+      case repeatability
+        LOW:
+          repeatability := $29
+        MED:
+          repeatability := $22
+        HIGH:
+          repeatability := $34
+        OTHER:
+          repeatability := $29
+    10:
+      mps := $27
+      case repeatability
+        LOW:
+          repeatability := $2A
+        MED:
+          repeatability := $21
+        HIGH:
+          repeatability := $37
+        OTHER:
+          repeatability := $2A
+    OTHER:
+      mps := $23
+      case repeatability
+        LOW:
+          repeatability := $29
+        MED:
+          repeatability := $22
+        HIGH:
+          repeatability := $34
+        OTHER:
+          repeatability := $29
+
+  cmdword := (mps << 8) | repeatability
+  cmd (cmdword)
 
 PUB SetHeater(bool__enabled)
 'Enable/Disable built-in heater

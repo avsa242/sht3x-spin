@@ -16,8 +16,6 @@ CON
   SCL     = 6
   SDA     = 5
   SLAVE   = $44
-  RESET   = -1
-  ALERT   = -1
   I2C_HZ  = 100_000
 
 'Constants for demo state machine
@@ -43,7 +41,7 @@ VAR
   long _keyDaemon_cog, _keyDaemon_stack[100]
   byte _demo_state, _prev_state
 
-PUB Main
+PUB Main | t, rh, i
 
   Setup
 
@@ -79,7 +77,7 @@ PUB Help
 PUB Setup
 
   ser.Start (115_200)
-  sht3x.Start (SCL, SDA, I2C_HZ, SLAVE, RESET, ALERT)
+  sht3x.Start (SCL, SDA, I2C_HZ, SLAVE)
   _keyDaemon_cog := cognew(keyDaemon, @_keyDaemon_stack)
 
 PUB ClearStatus
