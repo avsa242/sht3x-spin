@@ -42,29 +42,23 @@ OBJ
   i2c   : "jm_i2c_fast"
 
 VAR
+  byte _i2c_cog
+  byte _scale
+  byte _ackbit
+  word _temp_word
+  word _rh_word
 
-  long err_cnt
-  long trans_cnt
-  word temp_word
-  word rh_word
-  long _ackbit
-  long _nak
-  word _scale
-  long _i2c_cog
-  long _i2c_scl, _i2c_sda, _i2c_addr, _reset, _alert
   byte SHT3X_ADDR, SHT3X_WR, SHT3X_RD
   
 PUB Null
 'This is not a top-level object
 
-PUB Start(I2C_SCL, I2C_SDA, I2C_HZ, I2C_ADDR, RESET, ALERT)
+PUB Start(I2C_SCL, I2C_SDA, I2C_HZ, I2C_ADDR)
 
   if I2C_SCL < 0 or I2C_SCL > 31 {    'Validate pin assignments and I2C bus speed
 } or I2C_SDA < 0 or I2C_SDA > 31 {
 } or I2C_HZ < 0 or I2C_HZ > I2C_MAX_HZ {
-} or I2C_SCL == I2C_SDA {
-} or RESET < -1 or RESET > 31 {       'Specify -1 for these last two if you aren't using them
-} or ALERT < -1 or ALERT > 31 
+} or I2C_SCL == I2C_SDA
     abort FALSE
 
   case I2C_ADDR
@@ -91,6 +85,10 @@ PUB Start(I2C_SCL, I2C_SDA, I2C_HZ, I2C_ADDR, RESET, ALERT)
   ifnot _i2c_cog
     i2c.terminate
     abort FALSE
+
+PUB Stop
+
+  i2c.terminate
 
 PUB Break
 'Stop Periodic Data Acquisition Mode
@@ -185,49 +183,44 @@ PUB FetchData: tempword_rhword | read_data[2], ms_word, ms_crc, ls_word, ls_crc 
     return FALSE
   i2c.pread (@read_data, 6, TRUE)
   i2c.stop
-  temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
-  rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
-  tempword_rhword := (temp_word << 16) | (rh_word)
+ _temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
+ _rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
+  tempword_rhword := (_temp_word << 16) | (_rh_word)
 
 
 PUB GetAlertStatus: alert_pending
 'Get Alert status
 ' 0*- No alerts
 ' 1 - at least one pending
-
   return alert_pending := ((GetStatus >> 15) & %1) * -1
 
 PUB GetHeaterStatus: heater_enabled
 'Get Heater status
 ' 0*- OFF
 ' 1 - ON
-
   return heater_enabled := ((GetStatus >> 13) & %1) * -1
 
 PUB GetLastCmdStatus: lastcmd_status
 'Command status
 ' 0*- Last command executed successfully
 ' 1 - Last command not processed. Invalid or failed integrated checksum
-
   return lastcmd_status := ((GetStatus >> 1) & %1) * -1
 
 PUB GetLastCRCStatus: lastwritecrc_status
 'Write data checksum status
 ' 0*- Checksum of last transfer was correct
 ' 1 - Checksum of last transfer write failed
-
   return lastwritecrc_status := (GetStatus & %1) * -1
 
 PUB GetResetStatus: reset_detected
 'Check for System Reset
 ' 0 - No reset since last 'clear status register'
 ' 1*- reset detected (hard reset, soft reset, power fail)
-
   return reset_detected := ((GetStatus >> 4) & %1) * -1
 
 PUB GetRH: humidity | read_data, rhtmp, rh
 'Return Relative Humidity in hundreths of a percent
-  return humidity := (100 * (rh_word * _scale)) / 65535
+  return humidity := (100 * (_rh_word * _scale)) / 65535
 
 PUB GetRHTrack_Alert: rhtrack_alert
 'RH Tracking Alert
@@ -236,11 +229,14 @@ PUB GetRHTrack_Alert: rhtrack_alert
   return rhtrack_alert := (GetStatus >> 11) & %1
 
 PUB GetSN: long__serial_num | read_data[2], ms_word, ls_word, ms_crc, ls_crc
-'Read 32bit serial number from SHT3x
+'Read 32bit serial number from SHT3x (not found in datasheet)
   cmd(SHT3X_READ_SERIALNUM)
   time.USleep (500)
   i2c.start
-  i2c.write (SHT3X_RD)
+  _ackbit := i2c.write (SHT3X_RD)
+  if _ackbit == i2c#NAK
+    i2c.stop
+    return FALSE
   i2c.pread (@read_data, 6, TRUE)
   i2c.stop
 
@@ -258,7 +254,10 @@ PUB GetStatus: word__status | read_data, status_crc
 'Read SHT3x status register
   cmd (SHT3X_READSTATUS)
   i2c.start
-  i2c.write (SHT3X_RD)
+  _ackbit := i2c.write (SHT3X_RD)
+  if _ackbit == i2c#NAK
+    i2c.stop
+    return FALSE
   i2c.pread (@read_data, 3, TRUE)
   i2c.stop
 
@@ -276,7 +275,7 @@ PUB GetTemp_RH(ptr_word__temp, ptr_word__rh)
 
 PUB GetTempC: temperature | read_data, ttmp, temp
 'Return temperature in hundreths of a degree Celsius
-  return temperature := ((175 * (temp_word * _scale)) / 65535)-(45 * _scale)
+  return temperature := ((175 * (_temp_word * _scale)) / 65535)-(45 * _scale)
 
 PUB GetTempRH(repeatability): tempword_rhword | check, read_data[2], ms_word, ms_crc, ls_word, ls_crc, meas_wait1, meas_wait2
 'Get Temperature and RH data from sensor
@@ -303,17 +302,20 @@ PUB GetTempRH(repeatability): tempword_rhword | check, read_data[2], ms_word, ms
   time.USleep (meas_wait1)
   i2c.start
   repeat
-    check := i2c.write (SHT3X_RD)
-  until check
+    check := i2c.write (SHT3X_RD)                   'This one is actually *supposed* to NAK
+  until check == i2c#NAK
   i2c.stop
   time.USleep (meas_wait2)
   i2c.start
   _ackbit := i2c.write (SHT3X_RD)
+  if _ackbit == i2c#NAK
+    i2c.stop
+    return FALSE
   i2c.pread (@read_data, 6, TRUE)
   i2c.stop
-  temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
-  rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
-  tempword_rhword := (temp_word << 16) | (rh_word)
+ _temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
+ _rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
+  tempword_rhword := (_temp_word << 16) | (_rh_word)
 
 PUB GetTempTrack_Alert: temptrack_alert
 'Temp Tracking Alert
@@ -343,14 +345,15 @@ PUB SoftReset 'UNTESTED
   i2c.stop
   time.MSleep (50)
 
-PRI cmd(cmd_word) | ackbit, cmd_long, cmd_byte
+PRI cmd(cmd_word) | cmd_long, cmd_byte
 
   if cmd_word
     cmd_long := (SHT3X_WR << 16) | cmd_word
     invert (@cmd_long)
     i2c.start
-    ackbit := i2c.pwrite (@cmd_long, 3)
-    if ackbit
+    _ackbit := i2c.pwrite (@cmd_long, 3)
+    if _ackbit == i2c#NAK
+      i2c.stop
       return FALSE
   else
     return FALSE

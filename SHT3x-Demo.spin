@@ -1,8 +1,9 @@
 {
     --------------------------------------------
-    Filename:
-    Author:
-    Copyright (c) 20__
+    Filename: SHT3x-Demo.spin
+    Author: Jesse Burt
+    Description: Interactive Demo for the Sensirion SHT3x driver
+    Copyright (c) 2018
     See end of file for terms of use.
     --------------------------------------------
 }
