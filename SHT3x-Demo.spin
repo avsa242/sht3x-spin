@@ -194,10 +194,12 @@ PUB DisplayTempRH_Periodic
         ser.Dec (_mps)
         ser.NewLine
     ser.Str (string("Measurement repeatability mode: "))
+
     case _repeatability
       sht3x#LOW: ser.Str (string("LOW", ser#NL))
       sht3x#MED: ser.Str (string("MED", ser#NL))
       sht3x#HIGH: ser.Str (string("HIGH", ser#NL))
+
     sht3x.FetchData
     if _repeatability == sht3x#HIGH and _mps == 10
       ser.Str (string("*** NOTE: At the current settings, some self-heating of the sensor may occur, per Sensirion data sheet.", ser#NL))
