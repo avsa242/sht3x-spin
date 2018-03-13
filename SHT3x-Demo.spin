@@ -21,12 +21,13 @@ CON
 'Constants for demo state machine
   DISP_HELP           = 0
   DISP_TEMP_RH        = 1
-  DISP_SN             = 2
-  DISP_STATUS         = 3
-  DISP_STATUS_PARSED  = 4
-  TOGGLE_HEATER       = 5
-  CLEAR_STATUS        = 6
-  RESET_SHT3X         = 7
+  DISP_TEMP_RH_PER    = 2
+  DISP_SN             = 3
+  DISP_STATUS         = 4
+  DISP_STATUS_PARSED  = 5
+  TOGGLE_HEATER       = 6
+  CLEAR_STATUS        = 7
+  RESET_SHT3X         = 8
   WAIT_STATE          = 100
 
 OBJ
@@ -40,16 +41,20 @@ VAR
 
   long _keyDaemon_cog, _keyDaemon_stack[100]
   byte _demo_state, _prev_state
+  long _mps
+  byte _repeatability
 
 PUB Main | t, rh, i
 
   Setup
 
+
   repeat
     case _demo_state
       CLEAR_STATUS:       ClearStatus
       DISP_HELP:          Help
-      DISP_TEMP_RH:       DisplayTempRH
+      DISP_TEMP_RH:       DisplayTempRH_OneShot
+      DISP_TEMP_RH_PER:   DisplayTempRH_Periodic
       DISP_SN:            DisplaySN
       DISP_STATUS:        DisplayStatusRaw
       DISP_STATUS_PARSED: DisplayStatusParsed
@@ -79,6 +84,9 @@ PUB Setup
   ser.Start (115_200)
   sht3x.Start (SCL, SDA, I2C_HZ, SLAVE)
   _keyDaemon_cog := cognew(keyDaemon, @_keyDaemon_stack)
+  _repeatability := sht3x#LOW
+  sht3x.SetRepeatability (_repeatability)
+  _mps := 0.5
 
 PUB ClearStatus
 
@@ -147,19 +155,59 @@ PUB DisplayStatusRaw | status_word
     ser.Hex (status_word, 4)
     time.MSleep (333)
 
-PUB DisplayTempRH | t, rh, tw, tf, rhw, rhf
+PUB DisplayTempRH_OneShot | t, rh, tw, tf, rhw, rhf
 
   repeat until _demo_state <> DISP_TEMP_RH
     ser.Clear
-    sht3x.GetTempRH (sht3x#HIGH)
-    t := sht3x.GetTempC
-    rh := sht3x.GetRH
+    ser.Str (string("Temperature/Humidity Display (One-shot measurement mode)", ser#NL))
+    ser.Str (string("Hotkeys:", ser#NL))
+    ser.Str (string("b, B: Cycle through repeatability modes", ser#NL))
+    ser.Str (string("t, T: Switch measurement mode to Periodic", ser#NL, ser#NL))
+    ser.Str (string("Measurement repeatability mode: "))
+    case _repeatability
+      sht3x#LOW: ser.Str (string("LOW", ser#NL))
+      sht3x#MED: ser.Str (string("MED", ser#NL))
+      sht3x#HIGH: ser.Str (string("HIGH", ser#NL))
+    sht3x.GetTempRH
     ser.Str (string("Temp: "))
-    DecimalDot (t)
+    DecimalDot (sht3x.GetTempC)
     ser.Str (string("C   RH: "))
-    DecimalDot (rh)
+    DecimalDot (sht3x.GetRH)
     ser.Char ("%")
     time.MSleep (333)
+
+PUB DisplayTempRH_Periodic
+
+  sht3x.PeriodicRead (_mps)
+
+  repeat until _demo_state <> DISP_TEMP_RH_PER
+    ser.Clear
+    ser.Str (string("Temperature/Humidity Display (Periodic measurement mode)", ser#NL))
+    ser.Str (string("Hotkeys:", ser#NL))
+    ser.Str (string("b, B: Cycle through repeatability modes", ser#NL))
+    ser.Str (string("m, M: Cycle through 0.5, 1, 2, 4, 10 measurements per second", ser#NL))
+    ser.Str (string("t, T: Switch measurement mode to One-shot", ser#NL, ser#NL))
+    ser.Str (string("Measurements per second: "))
+    case _mps
+      0.5: ser.Str (string("0.5", ser#NL))
+      OTHER:
+        ser.Dec (_mps)
+        ser.NewLine
+    ser.Str (string("Measurement repeatability mode: "))
+    case _repeatability
+      sht3x#LOW: ser.Str (string("LOW", ser#NL))
+      sht3x#MED: ser.Str (string("MED", ser#NL))
+      sht3x#HIGH: ser.Str (string("HIGH", ser#NL))
+    sht3x.FetchData
+    if _repeatability == sht3x#HIGH and _mps == 10
+      ser.Str (string("*** NOTE: At the current settings, some self-heating of the sensor may occur, per Sensirion data sheet.", ser#NL))
+    ser.Str (string("Temp: "))
+    DecimalDot (sht3x.GetTempC)
+    ser.Str (string("C   RH: "))
+    DecimalDot (sht3x.GetRH)
+    ser.Char ("%")
+    time.MSleep (100)
+  sht3x.Break               'Tell the sensor to break out of periodic mode
 
 PUB DecimalDot(hundreths) | whole, frac
 
@@ -190,31 +238,61 @@ PUB ToggleHeater
       ser.Str (string(ser#NL, "Heater disabled", ser#NL))
   _demo_state := WAIT_STATE
 
-PUB waitforkey(key, message)
-'Display 'message' on the terminal and
-' wait for an optionally specific key
-'Use 0 to wait for any key
-
-  ser.Str (message)
-  case key
-    0:
-      repeat until ser.CharIn
-    OTHER:
-      repeat until ser.CharIn == key
-
 PUB Waiting
 
   ser.Str (string(ser#NL, "Press any key to continue (ESC to return to previous demo)..."))
   repeat until _demo_state <> WAIT_STATE
 
 PUB keyDaemon | key_cmd, prev_state
-'state - waiting to return
-'does waitforkey message, then sets demo state to _prev_state
+
   repeat
     repeat until key_cmd := ser.CharIn
     case key_cmd
       "/", "?": _demo_state := DISP_HELP
-      "t", "T": _demo_state := DISP_TEMP_RH
+      "m", "M":
+        case _demo_state
+          DISP_TEMP_RH_PER:
+            case _mps
+              0.5:
+                _mps := 1
+                sht3x.PeriodicRead (_mps)
+              1:
+                _mps := 2
+                sht3x.PeriodicRead (_mps)
+              2:
+                _mps := 4
+                sht3x.PeriodicRead (_mps)
+              4:
+                _mps := 10
+                sht3x.PeriodicRead (_mps)
+              10:
+                _mps := 0.5
+                sht3x.PeriodicRead (_mps)
+              OTHER:
+                _mps := 0.5
+                sht3x.PeriodicRead (_mps)
+          OTHER:
+      "b", "B":
+        case _demo_state
+          DISP_TEMP_RH, DISP_TEMP_RH_PER:
+            case _repeatability
+              sht3x#LOW:
+                _repeatability := sht3x#MED
+                sht3x.SetRepeatability (_repeatability)
+              sht3x#MED:
+                _repeatability := sht3x#HIGH
+                sht3x.SetRepeatability (_repeatability)
+              sht3x#HIGH:
+                _repeatability := sht3x#LOW
+                sht3x.SetRepeatability (_repeatability)
+              OTHER:
+                _repeatability := sht3x#LOW
+                sht3x.SetRepeatability (_repeatability)
+          OTHER:
+      "t", "T":
+        case _demo_state
+          DISP_TEMP_RH: _demo_state := DISP_TEMP_RH_PER
+          OTHER:        _demo_state := DISP_TEMP_RH
       "n", "N": _demo_state := DISP_SN
       "r", "R":
         _prev_state := _demo_state

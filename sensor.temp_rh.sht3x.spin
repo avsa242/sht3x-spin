@@ -47,6 +47,7 @@ VAR
   byte _ackbit
   word _temp_word
   word _rh_word
+  byte _repeatability_mode
 
   byte SHT3X_ADDR, SHT3X_WR, SHT3X_RD
   
@@ -92,6 +93,7 @@ PUB Stop
 
 PUB Break
 'Stop Periodic Data Acquisition Mode
+' Use this when you wish to return to One-shot mode from Periodic Mode
   cmd(SHT3X_BREAK_STOP)
   i2c.stop
 
@@ -101,8 +103,10 @@ PUB ClearStatus
   i2c.stop
 
 PUB FetchData: tempword_rhword | read_data[2], ms_word, ms_crc, ls_word, ls_crc 'UNTESTED
-'Get Temperature and RH data from sensor
-'with repeatability level LOW, MED, HIGH
+'Get Temperature and RH data when sensor
+' in Periodic mode
+'To stop Periodic mode and return to One-shot mode, call the Break method,
+' then proceed with your one-shot mode calls.
   cmd (SHT3X_FETCHDATA)
   i2c.start
   _ackbit := i2c.write (SHT3X_RD)
@@ -114,7 +118,6 @@ PUB FetchData: tempword_rhword | read_data[2], ms_word, ms_crc, ls_word, ls_crc 
   _temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
   _rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
   tempword_rhword := (_temp_word << 16) | (_rh_word)
-
 
 PUB GetAlertStatus: alert_pending
 'Get Alert status
@@ -205,10 +208,10 @@ PUB GetTempC: temperature | read_data, ttmp, temp
 'Return temperature in hundredths of a degree Celsius
   return temperature := ((175 * (_temp_word * _scale)) / 65535)-(45 * _scale)
 
-PUB GetTempRH(repeatability): tempword_rhword | check, read_data[2], ms_word, ms_crc, ls_word, ls_crc, meas_wait1, meas_wait2
+PUB GetTempRH: tempword_rhword | check, read_data[2], ms_word, ms_crc, ls_word, ls_crc, meas_wait1, meas_wait2, repeatability
 'Get Temperature and RH data from sensor
 'with repeatability level LOW, MED, HIGH
-  case repeatability                                'Wait x uSec for measurement to complete
+  case _repeatability_mode                          'Wait x uSec for measurement to complete
     LOW:
       meas_wait1 := 500
       meas_wait2 := 2000
@@ -241,8 +244,8 @@ PUB GetTempRH(repeatability): tempword_rhword | check, read_data[2], ms_word, ms
     return FALSE
   i2c.pread (@read_data, 6, TRUE)
   i2c.stop
- _temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
- _rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
+  _temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
+  _rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
   tempword_rhword := (_temp_word << 16) | (_rh_word)
 
 PUB GetTempTrack_Alert: temptrack_alert
@@ -253,15 +256,21 @@ PUB GetTempTrack_Alert: temptrack_alert
 
 PUB IsPresent: status
 'Polls I2C bus for SHT3x
+'Returns TRUE if present.
   status := i2c.present(SHT3X_ADDR)
   return status
 
-PUB PeriodicRead(mps, repeatability) | cmdword 'UNTESTED
-
-  case mps
-    0:
+PUB PeriodicRead(meas_per_sec) | cmdword, mps, repeatability
+'Sets number of measurements per second the sensor should take
+' in Periodic Measurement mode.
+'To stop Periodic mode and return to One-shot mode, call the Break method,
+' then proceed with your one-shot mode calls.
+'*** Sensirion notes in their datasheet that at 10mps, self-heating
+'***  of the sensor might occur.
+  case meas_per_sec
+    0, 5, 0.5:
       mps := $20
-      case repeatability
+      case _repeatability_mode
         LOW:
           repeatability := $2F
         MED:
@@ -272,7 +281,7 @@ PUB PeriodicRead(mps, repeatability) | cmdword 'UNTESTED
           repeatability := $2F
     1:
       mps := $21
-      case repeatability
+      case _repeatability_mode
         LOW:
           repeatability := $2D
         MED:
@@ -283,7 +292,7 @@ PUB PeriodicRead(mps, repeatability) | cmdword 'UNTESTED
           repeatability := $2D
     2:
       mps := $22
-      case repeatability
+      case _repeatability_mode
         LOW:
           repeatability := $2B
         MED:
@@ -294,7 +303,7 @@ PUB PeriodicRead(mps, repeatability) | cmdword 'UNTESTED
           repeatability := $2B
     4:
       mps := $23
-      case repeatability
+      case _repeatability_mode
         LOW:
           repeatability := $29
         MED:
@@ -305,7 +314,7 @@ PUB PeriodicRead(mps, repeatability) | cmdword 'UNTESTED
           repeatability := $29
     10:
       mps := $27
-      case repeatability
+      case _repeatability_mode
         LOW:
           repeatability := $2A
         MED:
@@ -316,7 +325,7 @@ PUB PeriodicRead(mps, repeatability) | cmdword 'UNTESTED
           repeatability := $2A
     OTHER:
       mps := $23
-      case repeatability
+      case _repeatability_mode
         LOW:
           repeatability := $29
         MED:
@@ -325,7 +334,7 @@ PUB PeriodicRead(mps, repeatability) | cmdword 'UNTESTED
           repeatability := $34
         OTHER:
           repeatability := $29
-
+  Break                                             'Stop any measurements that might be ongoing
   cmdword := (mps << 8) | repeatability
   cmd (cmdword)
 
@@ -340,7 +349,16 @@ PUB SetHeater(bool__enabled)
     OTHER:
       cmd(SHT3X_HEATERDIS)
 
-PUB SoftReset 'UNTESTED
+PUB SetRepeatability(mode)
+'Sets repeatability mode for subsequent temperature/RH measurements taken
+' using either One-shot or Periodic mode
+  case mode
+    LOW:    _repeatability_mode := LOW
+    MED:    _repeatability_mode := MED
+    HIGH:   _repeatability_mode := HIGH
+    OTHER:  _repeatability_mode := LOW              'Default to least energy-consuming/least self-heating mode
+
+PUB SoftReset
 'Perform Soft Reset. Bit 4 of status register should subsequently read 1
   cmd (SHT3X_SOFTRESET)
   i2c.stop
