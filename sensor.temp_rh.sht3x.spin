@@ -153,6 +153,10 @@ PUB GetRH: humidity | read_data, rhtmp, rh
 'Return Relative Humidity in hundreths of a percent
   return humidity := (100 * (_rh_word * _scale)) / 65535
 
+PUB GetRH_Raw: word__rh
+
+  word__rh := _rh_word
+
 PUB GetRHTrack_Alert: rhtrack_alert
 'RH Tracking Alert
 ' 0 - No alert
@@ -199,54 +203,24 @@ PUB GetStatus: word__status | read_data, status_crc
   else
     return $53EC                                    'Return invalid value if CRC check failed
                                                     '(sets all 'Reserved' bits, which should normally be 0)
+PUB GetTempC: temperature | read_data, ttmp, temp
+'Return Calculated temperature in hundredths of a degree Celsius
+  return temperature := ((175 * (_temp_word * _scale)) / 65535)-(45 * _scale)
+
+PUB GetTemp_Raw: word__temp
+
+  return _temp_word
+
 PUB GetTemp_RH(ptr_word__temp, ptr_word__rh)
-'Return both Temperature and Humidity
+'Return both Calculated Temperature and Humidity
   long[ptr_word__temp] := GetTempC
   long[ptr_word__rh] := GetRH
 
-PUB GetTempC: temperature | read_data, ttmp, temp
-'Return temperature in hundredths of a degree Celsius
-  return temperature := ((175 * (_temp_word * _scale)) / 65535)-(45 * _scale)
-
-PUB GetTempRH: tempword_rhword | check, read_data[2], ms_word, ms_crc, ls_word, ls_crc, meas_wait1, meas_wait2, repeatability
-'Get Temperature and RH data from sensor
-'with repeatability level LOW, MED, HIGH
-  case _repeatability_mode                          'Wait x uSec for measurement to complete
-    LOW:
-      meas_wait1 := 500
-      meas_wait2 := 2000
-      repeatability := SHT3X_MEAS_LOWREP
-    MED:
-      meas_wait1 := 1500
-      meas_wait2 := 3000
-      repeatability := SHT3X_MEAS_MEDREP
-    HIGH:
-      meas_wait1 := 3500
-      meas_wait2 := 9000
-      repeatability := SHT3X_MEAS_HIGHREP
-    OTHER:                                          'Default to low-repeatability
-      meas_wait1 := 500
-      meas_wait2 := 2000
-      repeatability := SHT3X_MEAS_LOWREP
-
-  cmd (repeatability)
-  time.USleep (meas_wait1)
-  i2c.start
-  repeat
-    check := i2c.write (SHT3X_RD)                   'This one is actually *supposed* to NAK
-  until check == i2c#NAK
-  i2c.stop
-  time.USleep (meas_wait2)
-  i2c.start
-  _ackbit := i2c.write (SHT3X_RD)
-  if _ackbit == i2c#NAK
-    i2c.stop
-    return FALSE
-  i2c.pread (@read_data, 6, TRUE)
-  i2c.stop
-  _temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
-  _rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
-  tempword_rhword := (_temp_word << 16) | (_rh_word)
+PUB GetTemp_RH_Raw: long__temp_rh
+'Return both Calculated Temperature and Humidity
+'Places Temperature reading in Most significant word, RH in Least significant word
+  long__temp_rh.word[1] := _temp_word
+  long__temp_rh.word[0] := _rh_word
 
 PUB GetTempTrack_Alert: temptrack_alert
 'Temp Tracking Alert
@@ -337,6 +311,46 @@ PUB PeriodicRead(meas_per_sec) | cmdword, mps, repeatability
   Break                                             'Stop any measurements that might be ongoing
   cmdword := (mps << 8) | repeatability
   cmd (cmdword)
+
+PUB ReadTempRH: tempword_rhword | check, read_data[2], ms_word, ms_crc, ls_word, ls_crc, meas_wait1, meas_wait2, repeatability
+'Get Temperature and RH data from sensor
+'with repeatability level LOW, MED, HIGH
+  case _repeatability_mode                          'Wait x uSec for measurement to complete
+    LOW:
+      meas_wait1 := 500
+      meas_wait2 := 2000
+      repeatability := SHT3X_MEAS_LOWREP
+    MED:
+      meas_wait1 := 1500
+      meas_wait2 := 3000
+      repeatability := SHT3X_MEAS_MEDREP
+    HIGH:
+      meas_wait1 := 3500
+      meas_wait2 := 9000
+      repeatability := SHT3X_MEAS_HIGHREP
+    OTHER:                                          'Default to low-repeatability
+      meas_wait1 := 500
+      meas_wait2 := 2000
+      repeatability := SHT3X_MEAS_LOWREP
+
+  cmd (repeatability)
+  time.USleep (meas_wait1)
+  i2c.start
+  repeat
+    check := i2c.write (SHT3X_RD)                   'This one is actually *supposed* to NAK
+  until check == i2c#NAK
+  i2c.stop
+  time.USleep (meas_wait2)
+  i2c.start
+  _ackbit := i2c.write (SHT3X_RD)
+  if _ackbit == i2c#NAK
+    i2c.stop
+    return FALSE
+  i2c.pread (@read_data, 6, TRUE)
+  i2c.stop
+  _temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
+  _rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
+  tempword_rhword := (_temp_word << 16) | (_rh_word)
 
 PUB SetHeater(bool__enabled)
 'Enable/Disable built-in heater

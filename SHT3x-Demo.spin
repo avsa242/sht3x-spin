@@ -48,7 +48,6 @@ PUB Main | t, rh, i
 
   Setup
 
-
   repeat
     case _demo_state
       CLEAR_STATUS:       ClearStatus
@@ -94,6 +93,44 @@ PUB ClearStatus
   sht3x.ClearStatus
   ser.Str (string(ser#NL, "Status register cleared", ser#NL))
   _demo_state := WAIT_STATE
+
+PUB CycleMPS
+
+  case _mps
+    0.5:
+      _mps := 1
+      sht3x.PeriodicRead (_mps)
+    1:
+      _mps := 2
+      sht3x.PeriodicRead (_mps)
+    2:
+      _mps := 4
+      sht3x.PeriodicRead (_mps)
+    4:
+      _mps := 10
+      sht3x.PeriodicRead (_mps)
+    10:
+      _mps := 0.5
+      sht3x.PeriodicRead (_mps)
+    OTHER:
+      _mps := 0.5
+      sht3x.PeriodicRead (_mps)
+
+PUB CycleRepeatability
+
+  case _repeatability
+    sht3x#LOW:
+      _repeatability := sht3x#MED
+      sht3x.SetRepeatability (_repeatability)
+    sht3x#MED:
+      _repeatability := sht3x#HIGH
+      sht3x.SetRepeatability (_repeatability)
+    sht3x#HIGH:
+      _repeatability := sht3x#LOW
+      sht3x.SetRepeatability (_repeatability)
+    OTHER:
+      _repeatability := sht3x#LOW
+      sht3x.SetRepeatability (_repeatability)
 
 PUB DisplaySN | sn
 
@@ -168,7 +205,7 @@ PUB DisplayTempRH_OneShot | t, rh, tw, tf, rhw, rhf
       sht3x#LOW: ser.Str (string("LOW", ser#NL))
       sht3x#MED: ser.Str (string("MED", ser#NL))
       sht3x#HIGH: ser.Str (string("HIGH", ser#NL))
-    sht3x.GetTempRH
+    sht3x.ReadTempRH
     ser.Str (string("Temp: "))
     DecimalDot (sht3x.GetTempC)
     ser.Str (string("C   RH: "))
@@ -254,42 +291,12 @@ PUB keyDaemon | key_cmd, prev_state
       "m", "M":
         case _demo_state
           DISP_TEMP_RH_PER:
-            case _mps
-              0.5:
-                _mps := 1
-                sht3x.PeriodicRead (_mps)
-              1:
-                _mps := 2
-                sht3x.PeriodicRead (_mps)
-              2:
-                _mps := 4
-                sht3x.PeriodicRead (_mps)
-              4:
-                _mps := 10
-                sht3x.PeriodicRead (_mps)
-              10:
-                _mps := 0.5
-                sht3x.PeriodicRead (_mps)
-              OTHER:
-                _mps := 0.5
-                sht3x.PeriodicRead (_mps)
+            CycleMPS
           OTHER:
       "b", "B":
         case _demo_state
           DISP_TEMP_RH, DISP_TEMP_RH_PER:
-            case _repeatability
-              sht3x#LOW:
-                _repeatability := sht3x#MED
-                sht3x.SetRepeatability (_repeatability)
-              sht3x#MED:
-                _repeatability := sht3x#HIGH
-                sht3x.SetRepeatability (_repeatability)
-              sht3x#HIGH:
-                _repeatability := sht3x#LOW
-                sht3x.SetRepeatability (_repeatability)
-              OTHER:
-                _repeatability := sht3x#LOW
-                sht3x.SetRepeatability (_repeatability)
+            CycleRepeatability
           OTHER:
       "t", "T":
         case _demo_state
