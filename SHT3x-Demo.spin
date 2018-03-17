@@ -99,22 +99,22 @@ PUB CycleMPS
   case _mps
     0.5:
       _mps := 1
-      sht3x.PeriodicRead (_mps)
+      sht3x.SetPeriodicRead (_mps)
     1:
       _mps := 2
-      sht3x.PeriodicRead (_mps)
+      sht3x.SetPeriodicRead (_mps)
     2:
       _mps := 4
-      sht3x.PeriodicRead (_mps)
+      sht3x.SetPeriodicRead (_mps)
     4:
       _mps := 10
-      sht3x.PeriodicRead (_mps)
+      sht3x.SetPeriodicRead (_mps)
     10:
       _mps := 0.5
-      sht3x.PeriodicRead (_mps)
+      sht3x.SetPeriodicRead (_mps)
     OTHER:
       _mps := 0.5
-      sht3x.PeriodicRead (_mps)
+      sht3x.SetPeriodicRead (_mps)
 
 PUB CycleRepeatability
 
@@ -147,7 +147,7 @@ PUB DisplayStatusParsed | status_word
     ser.Clear
     ser.Str (string("Status register (parsed):", ser#NL, ser#NL))
     ser.Str (string("Pending Alerts       : "))
-    case sht3x.GetAlertStatus
+    case sht3x.IsAlertPending
       FALSE:  ser.Str (string("           NO"))
       TRUE:   ser.Str (string("          YES"))
     ser.NewLine
@@ -157,12 +157,12 @@ PUB DisplayStatusParsed | status_word
       TRUE:   ser.Str (string("           ON"))
     ser.NewLine
     ser.Str (string("RH Tracking Alert    : "))
-    case sht3x.GetRHTrack_Alert
+    case sht3x.IsRHTrack_Alert
       FALSE:  ser.Str (string("           NO"))
       TRUE:   ser.Str (string("          YES"))
     ser.NewLine
     ser.Str (string("T Tracking Alert     : "))
-    case sht3x.GetTempTrack_Alert
+    case sht3x.IsTempTrack_Alert
       FALSE:  ser.Str (string("           NO"))
       TRUE:   ser.Str (string("          YES"))
     ser.NewLine
@@ -208,14 +208,16 @@ PUB DisplayTempRH_OneShot | t, rh, tw, tf, rhw, rhf
     sht3x.ReadTempRH
     ser.Str (string("Temp: "))
     DecimalDot (sht3x.GetTempC)
-    ser.Str (string("C   RH: "))
+    ser.Str (string("C   "))
+    DecimalDot (sht3x.GetTempF)
+    ser.Str (string("F   RH: "))
     DecimalDot (sht3x.GetRH)
     ser.Char ("%")
     time.MSleep (333)
 
 PUB DisplayTempRH_Periodic
 
-  sht3x.PeriodicRead (_mps)
+  sht3x.SetPeriodicRead (_mps)
 
   repeat until _demo_state <> DISP_TEMP_RH_PER
     ser.Clear
