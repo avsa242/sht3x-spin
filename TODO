@@ -1,5 +1,0 @@
-* Implement proper I2C transaction validation (ACK/NAK)
-* GetTempRaw, GetRHRaw methods (return raw words)
-* Test the periodic measurement mode functions. These didn't seem to function in a very cursory test.
-* Investigate better way to implement repeatability mode. Maybe make global VAR state?
-* Methods to get/set Temp and RH tracking alert regs
