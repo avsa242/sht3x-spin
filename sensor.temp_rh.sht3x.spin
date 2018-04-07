@@ -30,6 +30,15 @@ CON
   SHT3X_HEATEREN              = $306D
   SHT3X_HEATERDIS             = $3066
 
+  SHT3X_ALERTLIM_RD_HI_SET    = $E11F
+  SHT3X_ALERTLIM_RD_HI_CLR    = $E114
+  SHT3X_ALERTLIM_RD_LO_CLR    = $E109
+  SHT3X_ALERTLIM_RD_LO_SET    = $E102
+  SHT3X_ALERTLIM_WR_HI_SET    = $611D
+  SHT3X_ALERTLIM_WR_HI_CLR    = $6116
+  SHT3X_ALERTLIM_WR_LO_CLR    = $610B
+  SHT3X_ALERTLIM_WR_LO_SET    = $6100
+
   LOW                         = 0
   MED                         = 1
   HIGH                        = 2
@@ -42,6 +51,7 @@ OBJ
   i2c   : "jm_i2c_fast"
 
 VAR
+
   byte _i2c_cog
   byte _scale
   byte _ackbit
@@ -55,6 +65,9 @@ PUB Null
 'This is not a top-level object
 
 PUB Start(I2C_SCL, I2C_SDA, I2C_HZ, I2C_ADDR)
+
+  if _i2c_cog                         'Stop the I2C object, if it's already running
+    Stop
 
   if I2C_SCL < 0 or I2C_SCL > 31 {    'Validate pin assignments and I2C bus speed
 } or I2C_SDA < 0 or I2C_SDA > 31 {
@@ -82,10 +95,12 @@ PUB Start(I2C_SCL, I2C_SDA, I2C_HZ, I2C_ADDR)
                                       'Calcs overflow if scaling to 1000, so limit to 100 (2 decimal places)
                                       'Makes more sense anyway, given the accuracy limits of the device
 
-  _i2c_cog := i2c.setupx (I2C_SCL, I2C_SDA, I2C_HZ)
+  _i2c_cog := i2c.setupx (I2C_SCL, I2C_SDA, I2C_HZ) + 1
   ifnot _i2c_cog
     i2c.terminate
     abort FALSE
+
+  return _i2c_cog
 
 PUB Stop
 
@@ -102,7 +117,39 @@ PUB ClearStatus
   cmd(SHT3X_CLEARSTATUS)
   i2c.stop
 
-PUB FetchData: tempword_rhword | read_data[2], ms_word, ms_crc, ls_word, ls_crc 'UNTESTED
+PUB ConvertTempRaw16_Raw9(word__temp): temp_9bit
+
+  return temp_9bit := (ConvertTempC_Raw (word__temp) >> 7) & $001FF
+
+PUB ConvertTempRaw9_Raw16(temp_9bit): word__temp
+
+  return word__temp := temp_9bit << 7
+
+PUB ConvertTempC_Raw(temp_c): temp_raw
+
+  return temp_raw := (((temp_c * _scale) + (45 * _scale)) / 175 * 65535) / _scale
+
+PUB ConvertTempRaw_C(temp_raw): temp_c
+
+  return temp_c := ((175 * (temp_raw * _scale)) / 65535)-(45 * _scale)
+
+PUB ConvertRHRaw16_Raw7(word__rh): rh_7bit
+
+  return rh_7bit := ConvertRHPct_Raw (word__rh) & $FE00
+
+PUB ConvertRHRaw7_Raw16(rh_7bit): word__rh
+
+  return word__rh := rh_7bit << 8
+
+PUB ConvertRHPct_Raw(rh_pct): rh_raw
+
+  return rh_raw := ((rh_pct * _scale) / 100 * 65535) / _scale
+
+PUB ConvertRHRaw_Pct(rh_raw): rh_pct
+
+  return rh_pct := (100 * (rh_raw * _scale)) / 65535
+
+PUB FetchData: tempword_rhword | read_data[2], ms_word, ms_crc, ls_word, ls_crc
 'Get Temperature and RH data when sensor is in Periodic mode
 'To stop Periodic mode and return to One-shot mode, call the Break method,
 ' then proceed with your one-shot mode calls.
@@ -153,7 +200,7 @@ PUB GetRH_Raw: word__rh
 PUB GetSN: long__serial_num | read_data[2], ms_word, ls_word, ms_crc, ls_crc
 'Read 32bit serial number from SHT3x (not found in datasheet)
   cmd(SHT3X_READ_SERIALNUM)
-  time.USleep (500)
+  time.USleep (500)                                 'Must wait a bit, otherwise no/invalid data may be returned
   i2c.start
   _ackbit := i2c.write (SHT3X_RD)
   if _ackbit == i2c#NAK
@@ -208,12 +255,6 @@ PUB IsAlertPending: bool__alert_pending
 ' TRUE    - At least one alert pending
   return bool__alert_pending := ((GetStatus >> 15) & %1) * -1
 
-PUB IsPresent: status
-'Polls I2C bus for SHT3x
-'Returns TRUE if present.
-  status := i2c.present(SHT3X_ADDR)
-  return status
-
 PUB IsRHTrack_Alert: bool__rhtrack_alert
 'RH Tracking Alert
 ' FALSE   - No alert
@@ -267,6 +308,232 @@ PUB ReadTempRH: tempword_rhword | check, read_data[2], ms_word, ms_crc, ls_word,
   _temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
   _rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
   tempword_rhword := (_temp_word << 16) | (_rh_word)
+
+PUB GetAlertHighSet: word__hilimit_set| read_crc, read_data
+
+  cmd(SHT3X_ALERTLIM_RD_HI_SET)
+  i2c.start
+  i2c.write (SHT3X_RD)
+  i2c.pread (@read_data, 3, TRUE)
+  i2c.stop
+
+  read_crc := read_data.byte[2]
+  word__hilimit_set := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
+
+  if compare(crc8(@word__hilimit_set, 2), read_crc)
+    return word__hilimit_set
+  else
+    return FALSE
+
+PUB GetAlertHighSetRH: word__rh_hilimit_set
+
+  return (GetAlertHighSet & $FE00) >> 8
+
+PUB GetAlertHighSetTemp: word__temp_hilimit_set
+
+  return (GetAlertHighSet & $1FF)
+
+PUB GetAlertHighClear: word__hilimit_clear| read_crc, read_data
+
+  cmd(SHT3X_ALERTLIM_RD_HI_CLR)
+  i2c.start
+  i2c.write (SHT3X_RD)
+  i2c.pread (@read_data, 3, TRUE)
+  i2c.stop
+
+  read_crc := read_data.byte[2]
+  word__hilimit_clear := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
+
+  if compare(crc8(@word__hilimit_clear, 2), read_crc)
+    return word__hilimit_clear
+  else
+    return FALSE
+
+PUB GetAlertHighClearRH: word__rh_hilimit_clear
+
+  return (GetAlertHighClear & $FE00) >> 8
+
+PUB GetAlertHighClearTemp: word__temp_hilimit_clear
+
+  return (GetAlertHighClear & $1FF)
+
+PUB GetAlertLowClear: word__lolimit_clear| read_crc, read_data
+
+  cmd(SHT3X_ALERTLIM_RD_LO_CLR)
+  i2c.start
+  i2c.write (SHT3X_RD)
+  i2c.pread (@read_data, 3, TRUE)
+  i2c.stop
+
+  read_crc := read_data.byte[2]
+  word__lolimit_clear := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
+
+  if compare(crc8(@word__lolimit_clear, 2), read_crc)
+    return word__lolimit_clear
+  else
+    return FALSE
+
+PUB GetAlertLowClearRH: word__rh_lolimit_clear
+
+  return (GetAlertLowClear & $FE00) >> 8
+
+PUB GetAlertLowClearTemp: word__temp_lolimit_clear
+
+  return (GetAlertLowClear & $1FF)
+
+PUB GetAlertLowSet: word__lolimit_set| read_crc, read_data
+
+  cmd(SHT3X_ALERTLIM_RD_LO_SET)
+  i2c.start
+  i2c.write (SHT3X_RD)
+  i2c.pread (@read_data, 3, TRUE)
+  i2c.stop
+
+  read_crc := read_data.byte[2]
+  word__lolimit_set := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
+
+  if compare(crc8(@word__lolimit_set, 2), read_crc)
+    return word__lolimit_set
+  else
+    return FALSE
+
+PUB GetAlertLowSetRH: word__rh_lolimit_set
+
+  return (GetAlertLowSet & $FE00) >> 8
+
+PUB GetAlertLowSetTemp: word__temp_lolimit_set
+
+  return (GetAlertLowSet & $1FF)
+
+PUB SetAlertHigh(rh_set, rh_clr, temp_set, temp_clr)
+
+  SetAlertHigh_Set (rh_set, temp_set)
+  SetAlertHigh_Clr (rh_clr, temp_clr)
+
+PUB SetAlertLow(rh_clr, rh_set, temp_clr, temp_set)
+
+  SetAlertLow_Set (rh_set, temp_set)
+  SetAlertLow_Clr (rh_clr, temp_clr)
+
+PUB SetAllAlert(rh_hi_set, temp_hi_set, rh_hi_clr, temp_hi_clr, rh_lo_clr, temp_lo_clr, rh_lo_set, temp_lo_set)
+
+  SetAlertHigh_Set (rh_hi_set, temp_hi_set)
+  SetAlertHigh_Clr (rh_hi_clr, temp_hi_clr)
+  SetAlertLow_Clr (rh_lo_clr, temp_lo_clr)
+  SetAlertLow_Set (rh_lo_set, temp_lo_set)
+
+PUB SetAlertHigh_Set(rh_set, temp_set) | rht, tt, wt, crct, write_data
+
+  rht := ConvertRHRaw16_Raw7 (rh_set)'ConvertRHPct_Raw (rh_set) & $FE00
+  tt := ConvertTempRaw16_Raw9 (temp_set)'(ConvertTempC_Raw (temp_set) >> 7) & $001FF
+  write_data := (rht | tt) & $FFFF
+  crct := crc8(@write_data, 2)
+  if cmd(SHT3X_ALERTLIM_WR_HI_SET)
+    i2c.stop
+    return $DEADC0DE
+
+  _ackbit := i2c.write (write_data.byte[1])
+  if _ackbit == i2c#NAK
+    i2c.stop
+    return $DEAD0001
+
+  _ackbit := i2c.write (write_data.byte[0])
+  if _ackbit == i2c#NAK
+    i2c.stop
+    return $DEAD0000
+
+  _ackbit := i2c.write (crct)
+  if _ackbit == i2c#NAK
+    i2c.stop
+    return ($DEAD << 16) | crct
+
+  i2c.stop
+  return write_data
+
+PUB SetAlertHigh_Clr(rh_clr, temp_clr) | rht, tt, write_data, crct
+
+  rht := ConvertRHPct_Raw (rh_clr) & $FE00
+  tt := (ConvertTempC_Raw (temp_clr) >> 7) & $001FF
+  write_data := (rht | tt) & $FFFF
+  crct := crc8(@write_data, 2)
+  if cmd(SHT3X_ALERTLIM_WR_HI_CLR)
+    i2c.stop
+    return $DEADC0DE
+
+  _ackbit := i2c.write (write_data.byte[1])
+  if _ackbit == i2c#NAK
+    i2c.stop
+    return $DEAD0001
+
+  _ackbit := i2c.write (write_data.byte[0])
+  if _ackbit == i2c#NAK
+    i2c.stop
+    return $DEAD0000
+
+  _ackbit := i2c.write (crct)
+  if _ackbit == i2c#NAK
+    i2c.stop
+    return ($DEAD << 16) | crct
+
+  i2c.stop
+  return write_data
+
+PUB SetAlertLow_Clr(rh_clr, temp_clr) | rht, tt, write_data, crct
+
+  rht := ConvertRHPct_Raw (rh_clr) & $FE00
+  tt := (ConvertTempC_Raw (temp_clr) >> 7) & $001FF
+  write_data := (rht | tt) & $FFFF
+  crct := crc8(@write_data, 2)
+  if cmd(SHT3X_ALERTLIM_WR_LO_CLR)
+    i2c.stop
+    return $DEADC0DE
+
+  _ackbit := i2c.write (write_data.byte[1])
+  if _ackbit == i2c#NAK
+    i2c.stop
+    return $DEAD0001
+
+  _ackbit := i2c.write (write_data.byte[0])
+  if _ackbit == i2c#NAK
+    i2c.stop
+    return $DEAD0000
+
+  _ackbit := i2c.write (crct)
+  if _ackbit == i2c#NAK
+    i2c.stop
+    return ($DEAD << 16) | crct
+
+  i2c.stop
+  return write_data
+
+PUB SetAlertLow_Set(rh_set, temp_set) | rht, tt, write_data, crct
+
+  rht := ConvertRHPct_Raw (rh_set) & $FE00
+  tt := (ConvertTempC_Raw (temp_set) >> 7) & $001FF
+  write_data := (rht | tt) & $FFFF
+  crct := crc8(@write_data, 2)
+  if cmd(SHT3X_ALERTLIM_WR_LO_SET)
+    i2c.stop
+    return $DEADC0DE
+
+  _ackbit := i2c.write (write_data.byte[1])
+  if _ackbit == i2c#NAK
+    i2c.stop
+    return $DEAD0001
+
+  _ackbit := i2c.write (write_data.byte[0])
+  if _ackbit == i2c#NAK
+    i2c.stop
+    return $DEAD0000
+
+  _ackbit := i2c.write (crct)
+  if _ackbit == i2c#NAK
+    i2c.stop
+    return ($DEAD << 16) | crct
+
+  i2c.stop
+  return write_data
+
 
 PUB SetHeater(bool__enabled)
 'Enable/Disable built-in heater
