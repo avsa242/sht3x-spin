@@ -1,4 +1,4 @@
-This is a Parallax P8X32A/Propeller MCU driver for Sensirion's SHT3x-series (-DIS, or digital) combination Temperature/Humidity sensors. It should work with SHT30, 31 and 35, although it's only been tested with the SHT31.
+This is a Parallax P8X32A/Propeller MCU driver for Sensirion's SHT3x-series (-DIS, or digital) combination Temperature/Humidity sensors.
 
 The sensor communicates over I2C at up to 1MHz, although I've only had success at up to about 530kHz (using a Propeller Board of Education).
 
