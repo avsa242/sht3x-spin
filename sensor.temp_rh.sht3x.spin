@@ -10,35 +10,6 @@
 
 CON
 
-  SHT3X_ADDR_A                = $44 << 1                'ADDR Pin low (default)
-  SHT3X_ADDR_B                = $45 << 1                'ADDR Pin pulled high
-  I2C_MAX_HZ                  = 1_000_000               'SHT3X supports I2C FM up to 1MHz
-
-  SHT3X_BREAK_STOP            = $3093
-  SHT3X_READ_SERIALNUM        = $3780
-  SHT3X_MEAS_HIGHREP_STRETCH  = $2C06
-  SHT3X_MEAS_MEDREP_STRETCH   = $2C0D
-  SHT3X_MEAS_LOWREP_STRETCH   = $2C10
-  SHT3X_ART                   = $2B32
-  SHT3X_MEAS_HIGHREP          = $2400
-  SHT3X_MEAS_MEDREP           = $240B
-  SHT3X_MEAS_LOWREP           = $2416
-  SHT3X_FETCHDATA             = $E000
-  SHT3X_READSTATUS            = $F32D
-  SHT3X_CLEARSTATUS           = $3041
-  SHT3X_SOFTRESET             = $30A2
-  SHT3X_HEATEREN              = $306D
-  SHT3X_HEATERDIS             = $3066
-
-  SHT3X_ALERTLIM_RD_HI_SET    = $E11F
-  SHT3X_ALERTLIM_RD_HI_CLR    = $E114
-  SHT3X_ALERTLIM_RD_LO_CLR    = $E109
-  SHT3X_ALERTLIM_RD_LO_SET    = $E102
-  SHT3X_ALERTLIM_WR_HI_SET    = $611D
-  SHT3X_ALERTLIM_WR_HI_CLR    = $6116
-  SHT3X_ALERTLIM_WR_LO_CLR    = $610B
-  SHT3X_ALERTLIM_WR_LO_SET    = $6100
-
   LOW                         = 0
   MED                         = 1
   HIGH                        = 2
@@ -47,6 +18,7 @@ CON
 
 OBJ
 
+  sht3x : "core.con.sht3x"
   time  : "time"
   i2c   : "jm_i2c_fast"
 
@@ -71,23 +43,23 @@ PUB Start(I2C_SCL, I2C_SDA, I2C_HZ, I2C_ADDR)
 
   if I2C_SCL < 0 or I2C_SCL > 31 {    'Validate pin assignments and I2C bus speed
 } or I2C_SDA < 0 or I2C_SDA > 31 {
-} or I2C_HZ < 0 or I2C_HZ > I2C_MAX_HZ {
+} or I2C_HZ < 0 or I2C_HZ > sht3x#I2C_MAX_HZ {
 } or I2C_SCL == I2C_SDA
     abort FALSE
 
   case I2C_ADDR
-    SHT3X_ADDR_A:                     'Factory default slave address
-      SHT3X_ADDR := SHT3X_ADDR_A
+    sht3x#SLAVE_ADDR_A:                     'Factory default slave address
+      SHT3X_ADDR := sht3x#SLAVE_ADDR_A
       SHT3X_WR := SHT3X_ADDR
       SHT3X_RD := SHT3X_ADDR | %1
 
-    SHT3X_ADDR_B:                     'Alternate slave address
-      SHT3X_ADDR := SHT3X_ADDR_B
+    sht3x#SLAVE_ADDR_B:                     'Alternate slave address
+      SHT3X_ADDR := sht3x#SLAVE_ADDR_B
       SHT3X_WR := SHT3X_ADDR
       SHT3X_RD := SHT3X_ADDR | %1
 
     OTHER:                            'Default to factory-set slave address
-      SHT3X_ADDR := SHT3X_ADDR_A
+      SHT3X_ADDR := sht3x#SLAVE_ADDR_A
       SHT3X_WR := SHT3X_ADDR
       SHT3X_RD := SHT3X_ADDR | %1
 
@@ -109,12 +81,12 @@ PUB Stop
 PUB Break
 'Stop Periodic Data Acquisition Mode
 ' Use this when you wish to return to One-shot mode from Periodic Mode
-  cmd(SHT3X_BREAK_STOP)
+  cmd(sht3x#SHT3X_BREAK_STOP)
   i2c.stop
 
 PUB ClearStatus
 'Clears bits 15, 11, 10, and 4 in the status register
-  cmd(SHT3X_CLEARSTATUS)
+  cmd(sht3x#SHT3X_CLEARSTATUS)
   i2c.stop
 
 PUB ConvertTempRaw16_Raw9(word__temp): temp_9bit
@@ -153,7 +125,7 @@ PUB FetchData: tempword_rhword | read_data[2], ms_word, ms_crc, ls_word, ls_crc
 'Get Temperature and RH data when sensor is in Periodic mode
 'To stop Periodic mode and return to One-shot mode, call the Break method,
 ' then proceed with your one-shot mode calls.
-  cmd (SHT3X_FETCHDATA)
+  cmd (sht3x#SHT3X_FETCHDATA)
   i2c.start
   _ackbit := i2c.write (SHT3X_RD)
   if _ackbit == i2c#NAK
@@ -199,7 +171,7 @@ PUB GetRH_Raw: word__rh
 
 PUB GetSN: long__serial_num | read_data[2], ms_word, ls_word, ms_crc, ls_crc
 'Read 32bit serial number from SHT3x (not found in datasheet)
-  cmd(SHT3X_READ_SERIALNUM)
+  cmd(sht3x#SHT3X_READ_SERIALNUM)
   time.USleep (500)                                 'Must wait a bit, otherwise no/invalid data may be returned
   i2c.start
   _ackbit := i2c.write (SHT3X_RD)
@@ -221,7 +193,7 @@ PUB GetSN: long__serial_num | read_data[2], ms_word, ls_word, ms_crc, ls_crc
 
 PUB GetStatus: word__status | read_data, status_crc
 'Read SHT3x status register
-  cmd (SHT3X_READSTATUS)
+  cmd (sht3x#SHT3X_READSTATUS)
   i2c.start
   _ackbit := i2c.write (SHT3X_RD)
   if _ackbit == i2c#NAK
@@ -274,19 +246,19 @@ PUB ReadTempRH: tempword_rhword | check, read_data[2], ms_word, ms_crc, ls_word,
     LOW:
       meas_wait1 := 500
       meas_wait2 := 2000
-      repeatability := SHT3X_MEAS_LOWREP
+      repeatability := sht3x#SHT3X_MEAS_LOWREP
     MED:
       meas_wait1 := 1500
       meas_wait2 := 3000
-      repeatability := SHT3X_MEAS_MEDREP
+      repeatability := sht3x#SHT3X_MEAS_MEDREP
     HIGH:
       meas_wait1 := 3500
       meas_wait2 := 9000
-      repeatability := SHT3X_MEAS_HIGHREP
+      repeatability := sht3x#SHT3X_MEAS_HIGHREP
     OTHER:                                          'Default to low-repeatability
       meas_wait1 := 500
       meas_wait2 := 2000
-      repeatability := SHT3X_MEAS_LOWREP
+      repeatability := sht3x#SHT3X_MEAS_LOWREP
 
   cmd (repeatability)
   time.USleep (meas_wait1)
@@ -311,7 +283,7 @@ PUB ReadTempRH: tempword_rhword | check, read_data[2], ms_word, ms_crc, ls_word,
 
 PUB GetAlertHighSet: word__hilimit_set| read_crc, read_data
 
-  cmd(SHT3X_ALERTLIM_RD_HI_SET)
+  cmd(sht3x#SHT3X_ALERTLIM_RD_HI_SET)
   i2c.start
   i2c.write (SHT3X_RD)
   i2c.pread (@read_data, 3, TRUE)
@@ -335,7 +307,7 @@ PUB GetAlertHighSetTemp: word__temp_hilimit_set
 
 PUB GetAlertHighClear: word__hilimit_clear| read_crc, read_data
 
-  cmd(SHT3X_ALERTLIM_RD_HI_CLR)
+  cmd(sht3x#SHT3X_ALERTLIM_RD_HI_CLR)
   i2c.start
   i2c.write (SHT3X_RD)
   i2c.pread (@read_data, 3, TRUE)
@@ -359,7 +331,7 @@ PUB GetAlertHighClearTemp: word__temp_hilimit_clear
 
 PUB GetAlertLowClear: word__lolimit_clear| read_crc, read_data
 
-  cmd(SHT3X_ALERTLIM_RD_LO_CLR)
+  cmd(sht3x#SHT3X_ALERTLIM_RD_LO_CLR)
   i2c.start
   i2c.write (SHT3X_RD)
   i2c.pread (@read_data, 3, TRUE)
@@ -383,7 +355,7 @@ PUB GetAlertLowClearTemp: word__temp_lolimit_clear
 
 PUB GetAlertLowSet: word__lolimit_set| read_crc, read_data
 
-  cmd(SHT3X_ALERTLIM_RD_LO_SET)
+  cmd(sht3x#SHT3X_ALERTLIM_RD_LO_SET)
   i2c.start
   i2c.write (SHT3X_RD)
   i2c.pread (@read_data, 3, TRUE)
@@ -428,7 +400,7 @@ PUB SetAlertHigh_Set(rh_set, temp_set) | rht, tt, wt, crct, write_data
   tt := ConvertTempRaw16_Raw9 (temp_set)'(ConvertTempC_Raw (temp_set) >> 7) & $001FF
   write_data := (rht | tt) & $FFFF
   crct := crc8(@write_data, 2)
-  if cmd(SHT3X_ALERTLIM_WR_HI_SET)
+  if cmd(sht3x#SHT3X_ALERTLIM_WR_HI_SET)
     i2c.stop
     return $DEADC0DE
 
@@ -456,7 +428,7 @@ PUB SetAlertHigh_Clr(rh_clr, temp_clr) | rht, tt, write_data, crct
   tt := (ConvertTempC_Raw (temp_clr) >> 7) & $001FF
   write_data := (rht | tt) & $FFFF
   crct := crc8(@write_data, 2)
-  if cmd(SHT3X_ALERTLIM_WR_HI_CLR)
+  if cmd(sht3x#SHT3X_ALERTLIM_WR_HI_CLR)
     i2c.stop
     return $DEADC0DE
 
@@ -484,7 +456,7 @@ PUB SetAlertLow_Clr(rh_clr, temp_clr) | rht, tt, write_data, crct
   tt := (ConvertTempC_Raw (temp_clr) >> 7) & $001FF
   write_data := (rht | tt) & $FFFF
   crct := crc8(@write_data, 2)
-  if cmd(SHT3X_ALERTLIM_WR_LO_CLR)
+  if cmd(sht3x#SHT3X_ALERTLIM_WR_LO_CLR)
     i2c.stop
     return $DEADC0DE
 
@@ -512,7 +484,7 @@ PUB SetAlertLow_Set(rh_set, temp_set) | rht, tt, write_data, crct
   tt := (ConvertTempC_Raw (temp_set) >> 7) & $001FF
   write_data := (rht | tt) & $FFFF
   crct := crc8(@write_data, 2)
-  if cmd(SHT3X_ALERTLIM_WR_LO_SET)
+  if cmd(sht3x#SHT3X_ALERTLIM_WR_LO_SET)
     i2c.stop
     return $DEADC0DE
 
@@ -540,11 +512,11 @@ PUB SetHeater(bool__enabled)
 '(per SHT3x datasheet, it is for plausability checking only)
   case bool__enabled
     TRUE:
-      cmd(SHT3X_HEATEREN)
+      cmd(sht3x#SHT3X_HEATEREN)
     FALSE:
-      cmd(SHT3X_HEATERDIS)
+      cmd(sht3x#SHT3X_HEATERDIS)
     OTHER:
-      cmd(SHT3X_HEATERDIS)
+      cmd(sht3x#SHT3X_HEATERDIS)
 
 PUB SetPeriodicRead(meas_per_sec) | cmdword, mps, repeatability
 'Sets number of measurements per second the sensor should take
@@ -635,7 +607,7 @@ PUB SetRepeatability(mode)
 
 PUB SoftReset
 'Perform Soft Reset. Bit 4 of status register should subsequently read 1
-  cmd (SHT3X_SOFTRESET)
+  cmd (sht3x#SHT3X_SOFTRESET)
   i2c.stop
   time.MSleep (50)
 

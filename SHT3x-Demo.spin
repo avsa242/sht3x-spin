@@ -13,10 +13,10 @@ CON
   _clkmode = cfg#_clkmode           'Clock settings pulled from cfg object
   _xinfreq = cfg#_xinfreq           ' (optionally change them manually)
 
-  SCL                 = 6           'Change these to match your I2C pin configuration
-  SDA                 = 5
+  SCL                 = 3           'Change these to match your I2C pin configuration
+  SDA                 = 2
   SLAVE               = $44         'Can be $45 if the ADDR pin is pulled high
-  I2C_HZ              = 100_000     'SHT3x supports I2C FM up to 1MHz. Tested to ~530kHz
+  I2C_HZ              = 400_000     'SHT3x supports I2C FM up to 1MHz. Tested to ~530kHz
 
   TERM_RX             = 31          'Change these to suit your terminal settings
   TERM_TX             = 30
@@ -25,23 +25,21 @@ CON
 'Constants for demo state machine
   DISP_HELP           = 0
   DISP_TEMP_RH        = 1
-  DISP_TEMP_RH_PER    = 2
-  DISP_SN             = 3
-  DISP_STATUS         = 4
-  TOGGLE_HEATER       = 5
-  CLEAR_STATUS        = 6
-  RESET_SHT3X         = 7
+  DISP_TEMP_RH_ONE    = 2
+  DISP_TEMP_RH_PER    = 3
+  DISP_SN             = 4
+  DISP_STATUS         = 5
+  TOGGLE_HEATER       = 6
+  CLEAR_STATUS        = 7
+  RESET_SHT3X         = 8
   WAIT_STATE          = 100
-
-  MEAS_MODE_ONESHOT   = 0
-  MEAS_MODE_PERIODIC  = 1
 
   STATUS_RAW          = 0
   STATUS_PARSED       = 1
 
 OBJ
 
-  cfg   : "core.con.client.propboe"
+  cfg   : "core.con.client.demoboard"
   ser   : "com.serial.terminal"
   time  : "time"
   sht3x : "sensor.temp_rh.sht3x"
@@ -64,7 +62,8 @@ PUB Main
     case _demo_state
       CLEAR_STATUS:       ClearStatus
       DISP_HELP:          Help
-      DISP_TEMP_RH:       DisplayTempRH
+      DISP_TEMP_RH_PER:   DisplayTempRH_Periodic
+      DISP_TEMP_RH_ONE:   DisplayTempRH_OneShot
       DISP_SN:            DisplaySN
       DISP_STATUS:        DisplayStatus
       RESET_SHT3X:        SoftReset
@@ -121,130 +120,183 @@ PUB CycleRepeatability
 
 PUB DisplaySN | sn
 
-  repeat until _demo_State <> DISP_SN
-    ser.Clear
-    sn := sht3x.GetSN
-    ser.Str (string("Sensor serial number: "))
-    ser.Hex (sn, 8)
+  ser.Clear
+  ser.Str (string("Sensor serial number: "))
+  sn := sht3x.GetSN
+  ser.Hex (sn, 8)
+  _demo_state := WAIT_STATE
+
+PUB DisplayStatus | status_word, col
+
+  col := 23
+  ser.Clear
+  ser.Str (string("Status word:", ser#NL))
+  ser.Str (string("Pending Alerts:", ser#NL))
+  ser.Str (string("Heater status:", ser#NL))
+  ser.Str (string("RH Tracking Alert:", ser#NL))
+  ser.Str (string("T Tracking Alert:", ser#NL))
+  ser.Str (string("System Reset Detected:", ser#NL))
+  ser.Str (string("Command Status:", ser#NL))
+  ser.Str (string("Last write CRC status:", ser#NL))
+'                  |    |    |    |    |    |
+'                  0....5....10...15...20...25
+  repeat until _demo_state <> DISP_STATUS
+    status_word := sht3x.GetStatus
+    ser.Position (col, 0)
+    ser.Hex (status_word, 4)
+    case sht3x.IsAlertPending
+      FALSE:
+        ser.Position (col, 1)
+        ser.Str (string("NO"))
+      TRUE:
+        ser.Position (col, 1)
+        ser.Str (string("YES"))
+
+    case sht3x.GetHeaterStatus
+      FALSE:
+        ser.Position (col, 2)
+        ser.Str (string("OFF"))
+      TRUE:
+        ser.Position (col, 2)
+        ser.Str (string("ON"))
+
+    case sht3x.IsRHTrack_Alert
+      FALSE:
+        ser.Position (col, 3)
+        ser.Str (string("NO"))
+      TRUE:
+        ser.Position (col, 3)
+        ser.Str (string("YES"))
+
+    case sht3x.IsTempTrack_Alert
+      FALSE:
+        ser.Position (col, 4)
+        ser.Str (string("NO"))
+      TRUE:
+        ser.Position (col, 4)
+        ser.Str (string("YES"))
+
+    case sht3x.GetResetStatus
+      FALSE:
+        ser.Position (col, 5)
+        ser.Str (string("NO"))
+      TRUE:
+        ser.Position (col, 5)
+        ser.Str (string("YES"))
+
+    case sht3x.GetLastCmdStatus
+      FALSE:
+        ser.Position (col, 6)
+        ser.Str (string("SUCCESSFUL"))
+      TRUE:
+        ser.Position (col, 6)
+        ser.Str (string("NOT PROCESSED"))
+
+    case sht3x.GetLastCRCStatus
+      FALSE:
+        ser.Position (col, 7)
+        ser.Str (string("CRC CORRECT"))
+      TRUE:
+        ser.Position (col, 7)
+        ser.Str (string("CRC INCORRECT"))
+
     time.MSleep (_global_delay)
 
-PUB DisplayStatus | status_word
+PUB DisplayTempRH_Periodic | col, t, rh, tw, tf, rhw, rhf
 
-  repeat until _demo_state <> DISP_STATUS
-    case _disp_status_mode
-      STATUS_PARSED:
-        ser.Clear
-        ser.Str (string("Status register (parsed):", ser#NL, ser#NL))
-        ser.Str (string("Pending Alerts       : "))
-        case sht3x.IsAlertPending
-          FALSE:  ser.Str (string("           NO"))
-          TRUE:   ser.Str (string("          YES"))
-        ser.NewLine
-        ser.Str (string("Heater status        : "))
-        case sht3x.GetHeaterStatus
-          FALSE:  ser.Str (string("          OFF"))
-          TRUE:   ser.Str (string("           ON"))
-        ser.NewLine
-        ser.Str (string("RH Tracking Alert    : "))
-        case sht3x.IsRHTrack_Alert
-          FALSE:  ser.Str (string("           NO"))
-          TRUE:   ser.Str (string("          YES"))
-        ser.NewLine
-        ser.Str (string("T Tracking Alert     : "))
-        case sht3x.IsTempTrack_Alert
-          FALSE:  ser.Str (string("           NO"))
-          TRUE:   ser.Str (string("          YES"))
-        ser.NewLine
-        ser.Str (string("System Reset Detected: "))
-        case sht3x.GetResetStatus
-          FALSE:  ser.Str (string("           NO"))
-          TRUE:   ser.Str (string("          YES"))
-        ser.NewLine
-        ser.Str (string("Command Status       : "))
-        case sht3x.GetLastCmdStatus
-          FALSE:  ser.Str (string("   SUCCESSFUL"))
-          TRUE:   ser.Str (string("NOT PROCESSED"))
-        ser.NewLine
-        ser.Str (string("Last write CRC status: "))
-        case sht3x.GetLastCRCStatus
-          FALSE:  ser.Str (string("  CRC CORRECT"))
-          TRUE:   ser.Str (string("CRC INCORRECT"))
-        ser.NewLine
-        time.MSleep (_global_delay)
-      STATUS_RAW:
-        ser.Clear
-        status_word := sht3x.GetStatus
-        ser.Str (string("Status word: "))
-        ser.Hex (status_word, 4)
-        time.MSleep (_global_delay)
+  sht3x.SetPeriodicRead (_mps)
+  col := 32
+  ser.Clear
+'                  0....5....10...15...20...25...30...35...40...45...50...55...60...65...
+'                  |    |    |    |    |    |    |    |    |    |    |    |    |    |
+  ser.Str (string("Temperature/Humidity Display (Periodic measurement mode)", ser#NL))    '0
+  ser.Str (string("Hotkeys:", ser#NL))                                                    '1
+  ser.Str (string("b, B: Cycle through repeatability modes", ser#NL))                     '2
+  ser.Str (string("m, M: Cycle through 0.5, 1, 2, 4, 10 measurements per second", ser#NL))'3
+  ser.Str (string("t, T: Switch measurement mode to One-shot", ser#NL))                   '4
+  ser.Str (string(" (NOTE: At 10mps and high repeatability mode,", ser#NL,{               '5
+                 }"  self-heating of the sensor may occur)", ser#NL, ser#NL))             '6
+  ser.Str (string("Measurements per second:", ser#NL))                                    '8
+  ser.Str (string("RH Alert pending?:", ser#NL))                                          '9
+  ser.Str (string("Temp Alert pending?:", ser#NL))                                        '10
+  ser.Str (string("Measurement repeatability mode:", ser#NL))                             '11
+  ser.Str (string("Temp: 00.00C  00.00F  RH: 00.00%"))                                    '12
+'                  |    |    |    |    |    |    |    |    |    |    |    |    |    |
+'                  0....5....10...15...20...25...30...35...40...45...50...55...60...65...
+
+  repeat until _demo_state <> DISP_TEMP_RH_PER
+    case _mps
+      0.5:
+        ser.Position (col, 8)
+        ser.Str (string("0.5", ser#NL))
       OTHER:
-        _disp_status_mode := STATUS_RAW
+        ser.Position (col, 8)
+        ser.Dec (_mps)
+        ser.Chars (32, 2)
 
-PUB DisplayTempRH | t, rh, tw, tf, rhw, rhf
+    case sht3x.IsRHTrack_Alert
+      TRUE:
+        ser.Position (col, 9)
+        ser.Str (string("YES"))
+      FALSE:
+        ser.Position (col, 9)
+        ser.Str (string("NO "))
 
-  repeat until _demo_state <> DISP_TEMP_RH
-    case _measure_mode
-      MEAS_MODE_PERIODIC:
-        sht3x.SetPeriodicRead (_mps)
-        repeat until _measure_mode <> MEAS_MODE_PERIODIC OR _demo_state <> DISP_TEMP_RH
-          ser.Clear
-          ser.Str (string("Temperature/Humidity Display (Periodic measurement mode)", ser#NL))
-          ser.Str (string("Hotkeys:", ser#NL))
-          ser.Str (string("b, B: Cycle through repeatability modes", ser#NL))
-          ser.Str (string("m, M: Cycle through 0.5, 1, 2, 4, 10 measurements per second", ser#NL))
-          ser.Str (string("t, T: Switch measurement mode to One-shot", ser#NL, ser#NL))
-          ser.Str (string("Measurements per second: "))
-          case _mps
-            0.5: ser.Str (string("0.5", ser#NL))
-            OTHER:
-              ser.Dec (_mps)
-              ser.NewLine
-          if sht3x.IsRHTrack_Alert
-            ser.Str (string("*** Alert Pending: Humidity *** ", ser#NL))
-          if sht3x.IsTempTrack_Alert
-            ser.Str (string("*** Alert Pending: Temperature *** ", ser#NL))
+    case sht3x.IsTempTrack_Alert
+      TRUE:
+        ser.Position (col, 10)
+        ser.Str (string("YES"))
+      FALSE:
+        ser.Position (col, 10)
+        ser.Str (string("NO "))
 
-          ser.Str (string("Measurement repeatability mode: "))
+    ser.Position (col, 11)
+    case _repeatability
+      sht3x#LOW:  ser.Str (string("LOW "))
+      sht3x#MED:  ser.Str (string("MED "))
+      sht3x#HIGH: ser.Str (string("HIGH"))
 
-          case _repeatability
-            sht3x#LOW: ser.Str (string("LOW", ser#NL))
-            sht3x#MED: ser.Str (string("MED", ser#NL))
-            sht3x#HIGH: ser.Str (string("HIGH", ser#NL))
+    sht3x.FetchData
+    ser.Position (6, 12)
+    DecimalDot (sht3x.GetTempC)
+    ser.Position (14, 12)
+    DecimalDot (sht3x.GetTempF)
+    ser.Position (26, 12)
+    DecimalDot (sht3x.GetRH)
+    time.MSleep (_global_delay)
+  sht3x.Break               'Tell the sensor to break out of periodic mode
 
-          sht3x.FetchData
-          if _repeatability == sht3x#HIGH and _mps == 10
-            ser.Str (string("*** NOTE: At the current settings, some self-heating of the sensor may occur, per Sensirion data sheet.", ser#NL))
-          ser.Str (string("Temp: "))
-          DecimalDot (sht3x.GetTempC)
-          ser.Str (string("C   "))
-          DecimalDot (sht3x.GetTempF)
-          ser.Str (string("F   RH: "))
-          DecimalDot (sht3x.GetRH)
-          ser.Char ("%")
-          time.MSleep (100)
-        sht3x.Break               'Tell the sensor to break out of periodic mode
+PUB DisplayTempRH_OneShot | col
 
-      OTHER:
-        repeat until _measure_mode <> MEAS_MODE_ONESHOT OR _demo_state <> DISP_TEMP_RH
-          ser.Clear
-          ser.Str (string("Temperature/Humidity Display (One-shot measurement mode)", ser#NL))
-          ser.Str (string("Hotkeys:", ser#NL))
-          ser.Str (string("b, B: Cycle through repeatability modes", ser#NL))
-          ser.Str (string("t, T: Switch measurement mode to Periodic", ser#NL, ser#NL))
-          ser.Str (string("Measurement repeatability mode: "))
-          case _repeatability
-            sht3x#LOW: ser.Str (string("LOW", ser#NL))
-            sht3x#MED: ser.Str (string("MED", ser#NL))
-            sht3x#HIGH: ser.Str (string("HIGH", ser#NL))
-          sht3x.ReadTempRH
-          ser.Str (string("Temp: "))
-          DecimalDot (sht3x.GetTempC)
-          ser.Str (string("C   "))
-          DecimalDot (sht3x.GetTempF)
-          ser.Str (string("F   RH: "))
-          DecimalDot (sht3x.GetRH)
-          ser.Char ("%")
-          time.MSleep (_global_delay)
+  col := 32
+  ser.Clear
+'                  0....5....10...15...20...25...30...35...40...45...50...55...60...65...
+'                  |    |    |    |    |    |    |    |    |    |    |    |    |    |
+  ser.Str (string("Temperature/Humidity Display (One-shot measurement mode)", ser#NL))    '0
+  ser.Str (string("Hotkeys:", ser#NL))                                                    '1
+  ser.Str (string("b, B: Cycle through repeatability modes", ser#NL))                     '2
+  ser.Str (string("t, T: Switch measurement mode to Periodic", ser#NL, ser#NL))           '3
+  ser.Str (string("Measurement repeatability mode:", ser#NL))                             '5
+  ser.Str (string("Temp: 00.00C  00.00F  RH: 00.00%"))                                    '6
+
+'                  |    |    |    |    |    |    |    |    |    |    |    |    |    |
+'                  0....5....10...15...20...25...30...35...40...45...50...55...60...65...
+
+  repeat until _demo_state <> DISP_TEMP_RH_ONE
+    ser.Position (col, 5)
+    case _repeatability
+      sht3x#LOW: ser.Str (string("LOW", ser#NL))
+      sht3x#MED: ser.Str (string("MED", ser#NL))
+      sht3x#HIGH: ser.Str (string("HIGH", ser#NL))
+
+    sht3x.ReadTempRH
+    ser.Position (6, 6)
+    DecimalDot (sht3x.GetTempC)
+    ser.Position (14, 6)
+    DecimalDot (sht3x.GetTempF)
+    ser.Position (26, 6)
+    DecimalDot (sht3x.GetRH)
+    time.MSleep (_global_delay)
 
 PUB Help
 
@@ -271,7 +323,7 @@ PUB ToggleHeater
       ser.Str (string(ser#NL, "Heater disabled", ser#NL))
   _demo_state := WAIT_STATE
 
-PRI DecimalDot(hundredths) | whole, frac
+PUB DecimalDot(hundredths) | whole, frac
 
   whole := hundredths/100
   frac := hundredths-(whole*100)
@@ -281,14 +333,14 @@ PRI DecimalDot(hundredths) | whole, frac
     ser.Dec (0)
   ser.Dec (frac)
 
-PRI keyDaemon | key_cmd, prev_state
+PUB keyDaemon | key_cmd, prev_state
 
   repeat
     repeat until key_cmd := ser.CharIn
     case key_cmd
       "b", "B":
         case _demo_state
-          DISP_TEMP_RH:
+          DISP_TEMP_RH_ONE..DISP_TEMP_RH_PER:
             CycleRepeatability
           OTHER:
       "c", "C":
@@ -299,7 +351,7 @@ PRI keyDaemon | key_cmd, prev_state
         _demo_state := TOGGLE_HEATER
       "m", "M":
         case _demo_state
-          DISP_TEMP_RH:
+          DISP_TEMP_RH_PER:
             CycleMPS
           OTHER:
       "n", "N":
@@ -309,24 +361,26 @@ PRI keyDaemon | key_cmd, prev_state
         _prev_state := _demo_state
         _demo_state := RESET_SHT3X
       "s", "S":
-        case _demo_state
-          DISP_STATUS:  _disp_status_mode ^= 1      'Flip status reg display mode
-          OTHER:
-            _prev_state := _demo_state
-            _demo_state := DISP_STATUS
+        _prev_state := _demo_state
+        _demo_state := DISP_STATUS
       "t", "T":
         case _demo_state
-          DISP_TEMP_RH: _measure_mode ^= 1          'Flip measurement mode
+          DISP_TEMP_RH_PER:
+            _prev_state := _demo_state
+            _demo_state := DISP_TEMP_RH_ONE
+          DISP_TEMP_RH_ONE:
+            _prev_state := _demo_state
+            _demo_state := DISP_TEMP_RH_PER
           OTHER:
             _prev_state := _demo_state
-            _demo_state := DISP_TEMP_RH
+            _demo_state := DISP_TEMP_RH_ONE
       27:
         _demo_state := _prev_state
       OTHER   :
         _prev_state := _demo_state
         _demo_state := DISP_HELP
 
-PRI Setup
+PUB Setup
 
   _ser_cog := ser.StartRxTx (TERM_RX, TERM_TX, 0, TERM_BAUD)
 
@@ -350,12 +404,11 @@ PRI Setup
 
 '' Establish some initial settings
   _global_delay := 333
-  _measure_mode := MEAS_MODE_ONESHOT
   _mps := 0.5
   _repeatability := sht3x#LOW
   sht3x.SetRepeatability (_repeatability)
 
-PRI Waiting
+PUB Waiting
 
   ser.Str (string(ser#NL, "Press any key to continue (ESC to return to previous demo)..."))
   repeat until _demo_state <> WAIT_STATE
