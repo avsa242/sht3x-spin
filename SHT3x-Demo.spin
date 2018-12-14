@@ -15,8 +15,8 @@ CON
 
   SCL                 = 3           'Change these to match your I2C pin configuration
   SDA                 = 2
-  SLAVE               = $44         'Can be $45 if the ADDR pin is pulled high
-  I2C_HZ              = 400_000     'SHT3x supports I2C FM up to 1MHz. Tested to ~530kHz
+  SLAVE               = 0           'Can be 1 if the ADDR pin is pulled high
+  I2C_HZ              = 400_000     'SHT3x supports I2C FM up to 1MHz. Tested to 400kHz
 
   TERM_RX             = 31          'Change these to suit your terminal settings
   TERM_TX             = 30
@@ -382,13 +382,13 @@ PUB keyDaemon | key_cmd, prev_state
 
 PUB Setup
 
-  _ser_cog := ser.StartRxTx (TERM_RX, TERM_TX, 0, TERM_BAUD)
-
+  repeat until _ser_cog := ser.StartRxTx (TERM_RX, TERM_TX, 0, TERM_BAUD)
+  ser.Clear
   ser.Str (string("Serial IO started on cog "))
   ser.Dec (_ser_cog-1)
   ser.NewLine
 
-  ifnot _sht3x_cog := \sht3x.Start (SCL, SDA, I2C_HZ, SLAVE)
+  ifnot _sht3x_cog := sht3x.StartX (SCL, SDA, I2C_HZ, SLAVE)
     ser.Str (string("SHT3x object failed to start...halting"))
     sht3x.Stop
     repeat
@@ -407,6 +407,7 @@ PUB Setup
   _mps := 0.5
   _repeatability := sht3x#LOW
   sht3x.SetRepeatability (_repeatability)
+  repeat until ser.CharIn == 13
 
 PUB Waiting
 
