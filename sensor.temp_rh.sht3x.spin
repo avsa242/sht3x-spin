@@ -17,11 +17,11 @@ CON
     DEF_SDA         = 29
     DEF_HZ          = core#I2C_DEF_FREQ
 
-    LOW         = 0
-    MED         = 1
-    HIGH        = 2
+    LOW             = 0
+    MED             = 1
+    HIGH            = 2
 
-    POLYNOMIAL  = $31
+    POLYNOMIAL      = $31
 
 OBJ
 
@@ -42,53 +42,48 @@ VAR
 PUB Null
 'This is not a top-level object
 
-PUB Start(addr): okay
-'' Default to "standard" Propeller I2C pins and 400kHz
-  okay := Startx (DEF_SCL, DEF_SDA, DEF_HZ, addr)
+PUB Start(ADDR_BIT): okay
+' Default to "standard" Propeller I2C pins and 400kHz
+' ADDR_BIT
+'   0 - Default Slave address
+'   1 - Optional alternate Slave address
+  okay := Startx (DEF_SCL, DEF_SDA, DEF_HZ, ADDR_BIT)
 
-PUB Startx(scl, sda, hz, addr): okay
-'' Start with custom settings
-''  SCL         - I2C Serial Clock pin
-''  SDA         - I2C Serial Data pin
-''  hz          - I2C Bus Frequency (max 1_000_000/1MHz)
-''  addr        - Flag to indicate optional alternative slave address (0 or 1)
+PUB Startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT): okay
+' ADDR_BIT
+'   0 - Default Slave address
+'   1 - Optional alternate Slave address
 
-  if lookdown(scl: 0..31)                           'Validate pins
-    if lookdown(sda: 0..31)
-      if scl <> sda
-        if hz =< core#I2C_MAX_FREQ
-            case ||addr
+    if lookdown(SCL_PIN: 0..31) and lookdown(SDA_PIN: 0..31)
+        if I2C_HZ =< core#I2C_MAX_FREQ
+            if okay := i2c.setupx (SCL_PIN, SDA_PIN, I2C_HZ)    'I2C Object Started?
+                time.MSleep (1)
+            case ADDR_BIT
                 1: _addr_bit := 1 << 1
                 0: _addr_bit := 0
                 OTHER:
                     return FALSE
-            ifnot okay := i2c.setupx (scl, sda, hz)
-                return FALSE
-        else
-          return FALSE
-      else
-        return FALSE
-    else
-      return FALSE
-  else
-    return FALSE
 
-  _scale := 100 <# 100                'Scale fixed-point math up by this factor
+            if i2c.present (SLAVE_WR | _addr_bit)               'Response from device?
+                _scale := 100 <# 100                            'Scale fixed-point math up by this factor
+                return okay
+
+    return FALSE                                                'If we got here, something went wrong
 
 PUB Stop
 
-  i2c.terminate
+    i2c.terminate
 
 PUB Break
 'Stop Periodic Data Acquisition Mode
 ' Use this when you wish to return to One-shot mode from Periodic Mode
-  cmd(core#SHT3X_BREAK_STOP)
-  i2c.stop
+    writeRegX(core#SHT3X_BREAK_STOP, 0, 0)
 
 PUB ClearStatus
 'Clears bits 15, 11, 10, and 4 in the status register
-  cmd(core#SHT3X_CLEARSTATUS)
-  i2c.stop
+'  cmd(core#SHT3X_CLEARSTATUS)
+'  i2c.stop
+    writeRegX( core#SHT3X_CLEARSTATUS, 0, 0)
 
 PUB ConvertTempRaw16_Raw9(word__temp): temp_9bit
 
@@ -126,17 +121,11 @@ PUB FetchData: tempword_rhword | read_data[2], ms_word, ms_crc, ls_word, ls_crc
 'Get Temperature and RH data when sensor is in Periodic mode
 'To stop Periodic mode and return to One-shot mode, call the Break method,
 ' then proceed with your one-shot mode calls.
-  cmd (core#SHT3X_FETCHDATA)
-  i2c.start
-  _ackbit := i2c.write (SLAVE_RD | _addr_bit)
-  if _ackbit == i2c#NAK
-    i2c.stop                            'No Data available, stop
-    return FALSE
-  i2c.pread (@read_data, 6, TRUE)
-  i2c.stop
-  _temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
-  _rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
-  tempword_rhword := (_temp_word << 16) | (_rh_word)
+    if readRegX(core#SHT3X_FETCHDATA, 6, @read_data)    'If readRegX returned -1, then
+        return                                          ' no data was available - do nothing.
+    _temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
+    _rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
+    tempword_rhword := (_temp_word << 16) | (_rh_word)
 
 PUB GetHeaterStatus: bool__heater_enabled
 'Get Heater status
@@ -171,38 +160,21 @@ PUB GetRH_Raw: word__rh
   word__rh := _rh_word & $FFFF
 
 PUB GetSN: long__serial_num | read_data[2], ms_word, ls_word, ms_crc, ls_crc
-'Read 32bit serial number from SHT3x (not found in datasheet)
-  cmd(core#SHT3X_READ_SERIALNUM)
-  time.USleep (500)                                 'Must wait a bit, otherwise no/invalid data may be returned
-  i2c.start
-  _ackbit := i2c.write (SLAVE_RD | _addr_bit)
-  if _ackbit == i2c#NAK
-    i2c.stop
-    return FALSE
-  i2c.pread (@read_data, 6, TRUE)
-  i2c.stop
-
-  ms_word := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
-  ms_crc := read_data.byte[2]
-  ls_word := ((read_data.byte[3] << 8) | read_data.byte[4]) & $FFFF
-  ls_Crc := read_data.byte[5]
-
-  if compare(crc8(@ms_word, 2), ms_crc) AND compare(crc8(@ls_word, 2), ls_crc)
-    return long__serial_num := (ms_word << 16) | ls_word
-  else
-    return FALSE                                    'Return implausible value if CRC check failed
+'Read 32bit serial number from SHT3x (*not found in datasheet)
+    readRegX(core#SHT3X_READ_SERIALNUM, 6, @read_data)
+    ms_word := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
+    ms_crc := read_data.byte[2]
+    ls_word := ((read_data.byte[3] << 8) | read_data.byte[4]) & $FFFF
+    ls_crc := read_data.byte[5]
+    
+    if compare(crc8(@ms_word, 2), ms_crc) AND compare(crc8(@ls_word, 2), ls_crc)
+        return long__serial_num := (ms_word << 16) | ls_word
+    else
+        return FALSE                                    'Return implausible value if CRC check failed
 
 PUB GetStatus: word__status | read_data, status_crc
 'Read SHT3x status register
-  cmd (core#SHT3X_READSTATUS)
-  i2c.start
-  _ackbit := i2c.write (SLAVE_RD | _addr_bit)
-  if _ackbit == i2c#NAK
-    i2c.stop
-    return FALSE
-  i2c.pread (@read_data, 3, TRUE)
-  i2c.stop
-
+  readRegX(core#SHT3X_READSTATUS, 3, @read_data)
   word__status := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
   status_crc := read_data.byte[2]
   if compare (crc8(@word__status, 2), status_crc)
@@ -243,44 +215,28 @@ PUB IsTempTrack_Alert: bool__temptrack_alert
 PUB ReadTempRH: tempword_rhword | check, read_data[2], ms_word, ms_crc, ls_word, ls_crc, meas_wait1, meas_wait2, repeatability
 'Get Temperature and RH data from sensor
 ' with repeatability level LOW, MED, HIGH
-  case _repeatability_mode                          'Wait x uSec for measurement to complete
-    LOW:
-      meas_wait1 := 500
-      meas_wait2 := 2000
-      repeatability := core#SHT3X_MEAS_LOWREP
-    MED:
-      meas_wait1 := 1500
-      meas_wait2 := 3000
-      repeatability := core#SHT3X_MEAS_MEDREP
-    HIGH:
-      meas_wait1 := 3500
-      meas_wait2 := 9000
-      repeatability := core#SHT3X_MEAS_HIGHREP
-    OTHER:                                          'Default to low-repeatability
-      meas_wait1 := 500
-      meas_wait2 := 2000
-      repeatability := core#SHT3X_MEAS_LOWREP
+    case _repeatability_mode                          'Wait x uSec for measurement to complete
+        LOW:
+            meas_wait1 := 500
+            meas_wait2 := 2000
+            repeatability := core#SHT3X_MEAS_LOWREP_STRETCH
+        MED:
+            meas_wait1 := 1500
+            meas_wait2 := 3000
+            repeatability := core#SHT3X_MEAS_MEDREP_STRETCH
+        HIGH:
+            meas_wait1 := 3500
+            meas_wait2 := 9000
+            repeatability := core#SHT3X_MEAS_HIGHREP_STRETCH
+        OTHER:                                          'Default to low-repeatability
+            meas_wait1 := 500
+            meas_wait2 := 2000
+            repeatability := core#SHT3X_MEAS_LOWREP_STRETCH
 
-  cmd (repeatability)
-  time.USleep (meas_wait1)
-  i2c.start
-'  repeat
-  check := i2c.write (SLAVE_RD | _addr_bit)                   'This one is actually *supposed* to NAK
-  ifnot check
-    return FALSE
-'  until check == i2c#NAK
-  i2c.stop
-  time.USleep (meas_wait2)
-  i2c.start
-  _ackbit := i2c.write (SLAVE_RD | _addr_bit)
-  if _ackbit == i2c#NAK
-    i2c.stop
-    return FALSE
-  i2c.pread (@read_data, 6, TRUE)
-  i2c.stop
-  _temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
-  _rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
-  tempword_rhword := (_temp_word << 16) | (_rh_word)
+    readRegX(repeatability, 6, @read_data)
+    _temp_word := (read_data.byte[0] << 8) | read_data.byte[1]
+    _rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
+    tempword_rhword := (_temp_word << 16) | (_rh_word)
 
 PUB GetAlertHighSet: word__hilimit_set| read_crc, read_data
 
@@ -508,16 +464,15 @@ PUB SetAlertLow_Set(rh_set, temp_set) | rht, tt, write_data, crct
   return write_data
 
 
-PUB SetHeater(bool__enabled)
+PUB EnableHeater(enabled)
 'Enable/Disable built-in heater
 '(per SHT3x datasheet, it is for plausability checking only)
-  case bool__enabled
-    TRUE:
-      cmd(core#SHT3X_HEATEREN)
-    FALSE:
-      cmd(core#SHT3X_HEATERDIS)
-    OTHER:
-      cmd(core#SHT3X_HEATERDIS)
+    case ||enabled
+        0, 1:
+            enabled := lookupz(||enabled: core#SHT3X_HEATERDIS, core#SHT3X_HEATEREN)
+        OTHER:
+            return
+    writeRegX(enabled, 0, 0)
 
 PUB SetPeriodicRead(meas_per_sec) | cmdword, mps, repeatability
 'Sets number of measurements per second the sensor should take
@@ -526,76 +481,76 @@ PUB SetPeriodicRead(meas_per_sec) | cmdword, mps, repeatability
 ' then proceed with your one-shot mode calls.
 '*** Sensirion notes in their datasheet that at 10mps with repeatability set High,
 '***  self-heating of the sensor might occur.
-  case meas_per_sec
-    0, 5, 0.5:
-      mps := $20
-      case _repeatability_mode
-        LOW:
-          repeatability := $2F
-        MED:
-          repeatability := $24
-        HIGH:
-          repeatability := $32
+    case meas_per_sec
+        0, 5, 0.5:
+            mps := $20
+            case _repeatability_mode
+                LOW:
+                    repeatability := $2F
+                MED:
+                    repeatability := $24
+                HIGH:
+                    repeatability := $32
+                OTHER:
+                    repeatability := $2F
+        1:
+            mps := $21
+            case _repeatability_mode
+                LOW:
+                    repeatability := $2D
+                MED:
+                    repeatability := $26
+                HIGH:
+                    repeatability := $30
+                OTHER:
+                    repeatability := $2D
+        2:
+            mps := $22
+            case _repeatability_mode
+                LOW:
+                    repeatability := $2B
+                MED:
+                    repeatability := $20
+                HIGH:
+                    repeatability := $36
+                OTHER:
+                    repeatability := $2B
+        4:
+            mps := $23
+            case _repeatability_mode
+                LOW:
+                    repeatability := $29
+                MED:
+                    repeatability := $22
+                HIGH:
+                    repeatability := $34
+                OTHER:
+                    repeatability := $29
+        10:
+            mps := $27
+            case _repeatability_mode
+                LOW:
+                    repeatability := $2A
+                MED:
+                    repeatability := $21
+                HIGH:
+                    repeatability := $37
+                OTHER:
+                    repeatability := $2A
         OTHER:
-          repeatability := $2F
-    1:
-      mps := $21
-      case _repeatability_mode
-        LOW:
-          repeatability := $2D
-        MED:
-          repeatability := $26
-        HIGH:
-          repeatability := $30
-        OTHER:
-          repeatability := $2D
-    2:
-      mps := $22
-      case _repeatability_mode
-        LOW:
-          repeatability := $2B
-        MED:
-          repeatability := $20
-        HIGH:
-          repeatability := $36
-        OTHER:
-          repeatability := $2B
-    4:
-      mps := $23
-      case _repeatability_mode
-        LOW:
-          repeatability := $29
-        MED:
-          repeatability := $22
-        HIGH:
-          repeatability := $34
-        OTHER:
-          repeatability := $29
-    10:
-      mps := $27
-      case _repeatability_mode
-        LOW:
-          repeatability := $2A
-        MED:
-          repeatability := $21
-        HIGH:
-          repeatability := $37
-        OTHER:
-          repeatability := $2A
-    OTHER:
-      mps := $23
-      case _repeatability_mode
-        LOW:
-          repeatability := $29
-        MED:
-          repeatability := $22
-        HIGH:
-          repeatability := $34
-        OTHER:
-          repeatability := $29
-  Break                                             'Stop any measurements that might be ongoing
-  cmdword := (mps << 8) | repeatability
-  cmd (cmdword)
+            mps := $23
+            case _repeatability_mode
+                LOW:
+                    repeatability := $29
+                MED:
+                    repeatability := $22
+                HIGH:
+                    repeatability := $34
+                OTHER:
+                    repeatability := $29
+    Break                                             'Stop any measurements that might be ongoing
+    cmdword := (mps << 8) | repeatability
+    writeRegX(cmdword, 2, 0)
 
 PUB SetRepeatability(mode)
 'Sets repeatability mode for subsequent temperature/RH measurements taken
@@ -608,9 +563,8 @@ PUB SetRepeatability(mode)
 
 PUB SoftReset
 'Perform Soft Reset. Bit 4 of status register should subsequently read 1
-  cmd (core#SHT3X_SOFTRESET)
-  i2c.stop
-  time.MSleep (50)
+    writeRegX(core#SHT3X_SOFTRESET, 0, 0)
+    time.MSleep (50)
 
 PRI cmd(cmd_word) | cmd_long, cmd_byte
 
@@ -621,9 +575,70 @@ PRI cmd(cmd_word) | cmd_long, cmd_byte
     _ackbit := i2c.pwrite (@cmd_long, 3)
     if _ackbit == i2c#NAK
       i2c.stop
-      return FALSE
+      return $DEADBEEF
   else
     return FALSE
+
+PRI readRegX(reg, nr_bytes, addr_buff) | cmd_packet[2], ackbit
+' Write nr_bytes to register 'reg' stored in val
+' If nr_bytes is
+'   0, It's a command that has no arguments - write the command only
+'   1, It's a command with a single byte argument - write the command, then the byte
+'   2, It's a command with two arguments - write the command, then the two bytes (encoded as a word)
+    cmd_packet.byte[0] := SLAVE_WR | _addr_bit
+    cmd_packet.byte[1] := reg.byte[1]           'Register MSB
+    cmd_packet.byte[2] := reg.byte[0]           'Register LSB
+
+    i2c.start                                   {S}
+    i2c.pwrite (@cmd_packet, 3)                 {SL|W . COMMAND MSB . COMMAND LSB}
+
+    case reg                                    'Quirk handling
+        core#SHT3X_READ_SERIALNUM:              'S/N Read Needs delay before repeated start
+            time.USleep (500)
+            i2c.start                                   {Sr}
+            ackbit := i2c.write (SLAVE_RD | _addr_bit)  {SL|R}
+        core#SHT3X_MEAS_HIGHREP_STRETCH..core#SHT3X_MEAS_LOWREP_STRETCH:
+            i2c.stop                                    {P}' Measurements with clock-stretching don't
+            i2c.start                                   {Sr}' seem to work without this STOP condition
+            ackbit := i2c.write (SLAVE_RD | _addr_bit)  {SL|R}
+            i2c.stop
+        OTHER:
+            i2c.start
+            ackbit := i2c.write (SLAVE_RD | _addr_bit)
+    if ackbit == i2c#NAK
+        i2c.stop                                'No data was available,
+        return -1                               ' so do nothing
+    i2c.pread (addr_buff, nr_bytes, TRUE)       {...}
+    i2c.stop                                    {P}
+    
+PRI writeRegX(reg, nr_bytes, val) | cmd_packet[2]
+' Write nr_bytes to register 'reg' stored in val
+' If nr_bytes is
+'   0, It's a command that has no arguments - write the command only
+'   1, It's a command with a single byte argument - write the command, then the byte
+'   2, It's a command with two arguments - write the command, then the two bytes (encoded as a word)
+    cmd_packet.byte[0] := SLAVE_WR | _addr_bit
+
+    case nr_bytes
+        0:
+            cmd_packet.byte[1] := reg.byte[1]       'Simple command
+            cmd_packet.byte[2] := reg.byte[0]       'Simple command
+
+        1:
+            cmd_packet.byte[1] := reg.byte[1]       'Command w/1-byte argument
+            cmd_packet.byte[2] := reg.byte[0]       'Command w/1-byte argument
+            cmd_packet.byte[3] := val
+        2:
+            cmd_packet.byte[1] := reg.byte[1]       'Command w/2-byte argument
+            cmd_packet.byte[2] := reg.byte[0]       'Command w/2-byte argument
+            cmd_packet.byte[3] := val & $FF
+            cmd_packet.byte[4] := (val >> 8) & $FF
+        OTHER:
+            return
+
+    i2c.start
+    i2c.pwrite (@cmd_packet, 3 + nr_bytes)
+    i2c.stop
 
 PRI compare(b1, b2)
 

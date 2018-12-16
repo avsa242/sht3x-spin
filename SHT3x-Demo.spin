@@ -316,10 +316,10 @@ PUB ToggleHeater
   time.MSleep (_global_delay)
   case sht3x.GetHeaterStatus
     FALSE:
-      sht3x.SetHeater (TRUE)
+      sht3x.EnableHeater (TRUE)
       ser.Str (string(ser#NL, "Heater enabled", ser#NL))
     OTHER:
-      sht3x.SetHeater (FALSE)
+      sht3x.EnableHeater (FALSE)
       ser.Str (string(ser#NL, "Heater disabled", ser#NL))
   _demo_state := WAIT_STATE
 
@@ -388,7 +388,7 @@ PUB Setup
   ser.Dec (_ser_cog-1)
   ser.NewLine
 
-  ifnot _sht3x_cog := sht3x.StartX (SCL, SDA, I2C_HZ, SLAVE)
+  ifnot _sht3x_cog := sht3x.Start (0)'sht3x.StartX (SCL, SDA, I2C_HZ, SLAVE)
     ser.Str (string("SHT3x object failed to start...halting"))
     sht3x.Stop
     repeat
@@ -403,7 +403,7 @@ PUB Setup
   ser.NewLine
 
 '' Establish some initial settings
-  _global_delay := 333
+  _global_delay := 0'333
   _mps := 0.5
   _repeatability := sht3x#LOW
   sht3x.SetRepeatability (_repeatability)
