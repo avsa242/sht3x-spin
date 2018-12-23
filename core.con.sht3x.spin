@@ -1,3 +1,14 @@
+{
+    --------------------------------------------
+    Filename: core.con.sht3x.spin
+    Author: Jesse Burt
+    Copyright (c) 2018
+    Started Nov 19, 2017
+    Updated Dec 23, 2018
+    See end of file for terms of use.
+    --------------------------------------------
+}
+
 CON
 
     SLAVE_ADDR                  = $44 << 1                  ' Default slave address
