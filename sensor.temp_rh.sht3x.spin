@@ -21,6 +21,8 @@ CON
     MED             = 1
     HIGH            = 2
 
+    MSB             = 1
+    LSB             = 0
     POLYNOMIAL      = $31
 
 OBJ
@@ -81,41 +83,7 @@ PUB Break
 
 PUB ClearStatus
 'Clears bits 15, 11, 10, and 4 in the status register
-'  cmd(core#SHT3X_CLEARSTATUS)
-'  i2c.stop
     writeRegX( core#SHT3X_CLEARSTATUS, 0, 0)
-
-PUB ConvertTempRaw16_Raw9(word__temp): temp_9bit
-
-  return temp_9bit := (ConvertTempC_Raw (word__temp) >> 7) & $001FF
-
-PUB ConvertTempRaw9_Raw16(temp_9bit): word__temp
-
-  return word__temp := temp_9bit << 7
-
-PUB ConvertTempC_Raw(temp_c): temp_raw
-
-  return temp_raw := (((temp_c * _scale) + (45 * _scale)) / 175 * 65535) / _scale
-
-PUB ConvertTempRaw_C(temp_raw): temp_c
-
-  return temp_c := ((175 * (temp_raw * _scale)) / 65535)-(45 * _scale)
-
-PUB ConvertRHRaw16_Raw7(word__rh): rh_7bit
-
-  return rh_7bit := ConvertRHPct_Raw (word__rh) & $FE00
-
-PUB ConvertRHRaw7_Raw16(rh_7bit): word__rh
-
-  return word__rh := rh_7bit << 8
-
-PUB ConvertRHPct_Raw(rh_pct): rh_raw
-
-  return rh_raw := ((rh_pct * _scale) / 100 * 65535) / _scale
-
-PUB ConvertRHRaw_Pct(rh_raw): rh_pct
-
-  return rh_pct := (100 * (rh_raw * _scale)) / 65535
 
 PUB FetchData: tempword_rhword | read_data[2], ms_word, ms_crc, ls_word, ls_crc
 'Get Temperature and RH data when sensor is in Periodic mode
@@ -238,25 +206,20 @@ PUB ReadTempRH: tempword_rhword | check, read_data[2], ms_word, ms_crc, ls_word,
     _rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
     tempword_rhword := (_temp_word << 16) | (_rh_word)
 
-PUB GetAlertHighSet: word__hilimit_set| read_crc, read_data
+PUB GetAlertHighSet: word__hilimit_set | read_crc, read_data, ackbit, tmp
 
-  cmd(core#SHT3X_ALERTLIM_RD_HI_SET)
-  i2c.start
-  i2c.write (SLAVE_RD | _addr_bit)
-  i2c.pread (@read_data, 3, TRUE)
-  i2c.stop
+    readRegX(core#SHT3X_ALERTLIM_RD_HI_SET, 3, @read_data)
+    read_crc := read_data.byte[2]
+    word__hilimit_set := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
 
-  read_crc := read_data.byte[2]
-  word__hilimit_set := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
-
-  if compare(crc8(@word__hilimit_set, 2), read_crc)
-    return word__hilimit_set
-  else
-    return FALSE
+    if compare(crc8(@word__hilimit_set, 2), read_crc)
+        return word__hilimit_set
+    else
+        return $DEADBEEF
 
 PUB GetAlertHighSetRH: word__rh_hilimit_set
 
-  return (GetAlertHighSet & $FE00) >> 8
+  return GetAlertHighSet & $FE00
 
 PUB GetAlertHighSetTemp: word__temp_hilimit_set
 
@@ -264,12 +227,7 @@ PUB GetAlertHighSetTemp: word__temp_hilimit_set
 
 PUB GetAlertHighClear: word__hilimit_clear| read_crc, read_data
 
-  cmd(core#SHT3X_ALERTLIM_RD_HI_CLR)
-  i2c.start
-  i2c.write (SLAVE_RD | _addr_bit)
-  i2c.pread (@read_data, 3, TRUE)
-  i2c.stop
-
+  readRegX( core#SHT3X_ALERTLIM_RD_HI_CLR, 3, @read_data)
   read_crc := read_data.byte[2]
   word__hilimit_clear := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
 
@@ -280,20 +238,15 @@ PUB GetAlertHighClear: word__hilimit_clear| read_crc, read_data
 
 PUB GetAlertHighClearRH: word__rh_hilimit_clear
 
-  return (GetAlertHighClear & $FE00) >> 8
+  return GetAlertHighClear & $FE00
 
 PUB GetAlertHighClearTemp: word__temp_hilimit_clear
 
-  return (GetAlertHighClear & $1FF)
+  return GetAlertHighClear & $1FF
 
 PUB GetAlertLowClear: word__lolimit_clear| read_crc, read_data
 
-  cmd(core#SHT3X_ALERTLIM_RD_LO_CLR)
-  i2c.start
-  i2c.write (SLAVE_RD | _addr_bit)
-  i2c.pread (@read_data, 3, TRUE)
-  i2c.stop
-
+  readRegX( core#SHT3X_ALERTLIM_RD_LO_CLR, 3, @read_data)
   read_crc := read_data.byte[2]
   word__lolimit_clear := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
 
@@ -304,20 +257,15 @@ PUB GetAlertLowClear: word__lolimit_clear| read_crc, read_data
 
 PUB GetAlertLowClearRH: word__rh_lolimit_clear
 
-  return (GetAlertLowClear & $FE00) >> 8
+  return GetAlertLowClear & $FE00
 
 PUB GetAlertLowClearTemp: word__temp_lolimit_clear
 
-  return (GetAlertLowClear & $1FF)
+  return GetAlertLowClear & $1FF
 
 PUB GetAlertLowSet: word__lolimit_set| read_crc, read_data
 
-  cmd(core#SHT3X_ALERTLIM_RD_LO_SET)
-  i2c.start
-  i2c.write (SLAVE_RD | _addr_bit)
-  i2c.pread (@read_data, 3, TRUE)
-  i2c.stop
-
+  readRegX( core#SHT3X_ALERTLIM_RD_LO_SET, 3, @read_data)
   read_crc := read_data.byte[2]
   word__lolimit_set := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
 
@@ -328,11 +276,11 @@ PUB GetAlertLowSet: word__lolimit_set| read_crc, read_data
 
 PUB GetAlertLowSetRH: word__rh_lolimit_set
 
-  return (GetAlertLowSet & $FE00) >> 8
+  return GetAlertLowSet & $FE00
 
 PUB GetAlertLowSetTemp: word__temp_lolimit_set
 
-  return (GetAlertLowSet & $1FF)
+  return GetAlertLowSet & $1FF
 
 PUB SetAlertHigh(rh_set, rh_clr, temp_set, temp_clr)
 
@@ -351,118 +299,53 @@ PUB SetAllAlert(rh_hi_set, temp_hi_set, rh_hi_clr, temp_hi_clr, rh_lo_clr, temp_
   SetAlertLow_Clr (rh_lo_clr, temp_lo_clr)
   SetAlertLow_Set (rh_lo_set, temp_lo_set)
 
-PUB SetAlertHigh_Set(rh_set, temp_set) | rht, tt, wt, crct, write_data
+PUB SetAlertHigh_Set(rh_set, temp_set) | rht, tt, crct, tmp, write_data, t
+' Set high alarm trip threshold for RH and Temp
+  rht := RHPct_Raw7 (rh_set)
+  tt := TempDeg_Raw9 (temp_set)
+  tmp := (rht | tt)
+  crct := crc8(@tmp, 2)
+  write_data.byte[0] := tmp.byte[1]
+  write_data.byte[1] := tmp.byte[0]
+  write_data.byte[2] := crct
+  
+  writeRegX(core#SHT3X_ALERTLIM_WR_HI_SET, 3, write_data)
 
-  rht := ConvertRHRaw16_Raw7 (rh_set)'ConvertRHPct_Raw (rh_set) & $FE00
-  tt := ConvertTempRaw16_Raw9 (temp_set)'(ConvertTempC_Raw (temp_set) >> 7) & $001FF
-  write_data := (rht | tt) & $FFFF
-  crct := crc8(@write_data, 2)
-  if cmd(core#SHT3X_ALERTLIM_WR_HI_SET)
-    i2c.stop
-    return $DEADC0DE
+PUB SetAlertHigh_Clr(rh_clr, temp_clr) | rht, tt, write_data, crct, tmp
 
-  _ackbit := i2c.write (write_data.byte[1])
-  if _ackbit == i2c#NAK
-    i2c.stop
-    return $DEAD0001
+  rht := RHPct_Raw7 (rh_clr)
+  tt := TempDeg_Raw9 (temp_clr)
+  tmp := (rht | tt)
+  crct := crc8(@tmp, 2)
+  write_data.byte[0] := (tmp >> 8) & $FF
+  write_data.byte[1] := tmp & $FF
+  write_data.byte[2] := crct
+  
+  writeRegX(core#SHT3X_ALERTLIM_WR_HI_CLR, 3, write_data)
 
-  _ackbit := i2c.write (write_data.byte[0])
-  if _ackbit == i2c#NAK
-    i2c.stop
-    return $DEAD0000
+PUB SetAlertLow_Clr(rh_clr, temp_clr) | rht, tt, write_data, crct, tmp
 
-  _ackbit := i2c.write (crct)
-  if _ackbit == i2c#NAK
-    i2c.stop
-    return ($DEAD << 16) | crct
+  rht := RHPct_Raw7 (rh_clr)
+  tt := TempDeg_Raw9 (temp_clr)
+  tmp := (rht | tt)
+  crct := crc8(@tmp, 2)
+  write_data.byte[0] := (tmp >> 8) & $FF
+  write_data.byte[1] := tmp & $FF
+  write_data.byte[2] := crct
+  
+  writeRegX(core#SHT3X_ALERTLIM_WR_LO_CLR, 3, write_data)
 
-  i2c.stop
-  return write_data
+PUB SetAlertLow_Set(rh_set, temp_set) | rht, tt, write_data, crct, tmp
 
-PUB SetAlertHigh_Clr(rh_clr, temp_clr) | rht, tt, write_data, crct
-
-  rht := ConvertRHPct_Raw (rh_clr) & $FE00
-  tt := (ConvertTempC_Raw (temp_clr) >> 7) & $001FF
-  write_data := (rht | tt) & $FFFF
-  crct := crc8(@write_data, 2)
-  if cmd(core#SHT3X_ALERTLIM_WR_HI_CLR)
-    i2c.stop
-    return $DEADC0DE
-
-  _ackbit := i2c.write (write_data.byte[1])
-  if _ackbit == i2c#NAK
-    i2c.stop
-    return $DEAD0001
-
-  _ackbit := i2c.write (write_data.byte[0])
-  if _ackbit == i2c#NAK
-    i2c.stop
-    return $DEAD0000
-
-  _ackbit := i2c.write (crct)
-  if _ackbit == i2c#NAK
-    i2c.stop
-    return ($DEAD << 16) | crct
-
-  i2c.stop
-  return write_data
-
-PUB SetAlertLow_Clr(rh_clr, temp_clr) | rht, tt, write_data, crct
-
-  rht := ConvertRHPct_Raw (rh_clr) & $FE00
-  tt := (ConvertTempC_Raw (temp_clr) >> 7) & $001FF
-  write_data := (rht | tt) & $FFFF
-  crct := crc8(@write_data, 2)
-  if cmd(core#SHT3X_ALERTLIM_WR_LO_CLR)
-    i2c.stop
-    return $DEADC0DE
-
-  _ackbit := i2c.write (write_data.byte[1])
-  if _ackbit == i2c#NAK
-    i2c.stop
-    return $DEAD0001
-
-  _ackbit := i2c.write (write_data.byte[0])
-  if _ackbit == i2c#NAK
-    i2c.stop
-    return $DEAD0000
-
-  _ackbit := i2c.write (crct)
-  if _ackbit == i2c#NAK
-    i2c.stop
-    return ($DEAD << 16) | crct
-
-  i2c.stop
-  return write_data
-
-PUB SetAlertLow_Set(rh_set, temp_set) | rht, tt, write_data, crct
-
-  rht := ConvertRHPct_Raw (rh_set) & $FE00
-  tt := (ConvertTempC_Raw (temp_set) >> 7) & $001FF
-  write_data := (rht | tt) & $FFFF
-  crct := crc8(@write_data, 2)
-  if cmd(core#SHT3X_ALERTLIM_WR_LO_SET)
-    i2c.stop
-    return $DEADC0DE
-
-  _ackbit := i2c.write (write_data.byte[1])
-  if _ackbit == i2c#NAK
-    i2c.stop
-    return $DEAD0001
-
-  _ackbit := i2c.write (write_data.byte[0])
-  if _ackbit == i2c#NAK
-    i2c.stop
-    return $DEAD0000
-
-  _ackbit := i2c.write (crct)
-  if _ackbit == i2c#NAK
-    i2c.stop
-    return ($DEAD << 16) | crct
-
-  i2c.stop
-  return write_data
-
+  rht := RHPct_Raw7 (rh_set)
+  tt := TempDeg_Raw9 (temp_set)
+  tmp := (rht | tt)
+  crct := crc8(@tmp, 2)
+  write_data.byte[0] := (tmp >> 8) & $FF
+  write_data.byte[1] := tmp & $FF
+  write_data.byte[2] := crct
+  
+  writeRegX(core#SHT3X_ALERTLIM_WR_LO_SET, 3, write_data)
 
 PUB EnableHeater(enabled)
 'Enable/Disable built-in heater
@@ -564,36 +447,50 @@ PUB SetRepeatability(mode)
 PUB SoftReset
 'Perform Soft Reset. Bit 4 of status register should subsequently read 1
     writeRegX(core#SHT3X_SOFTRESET, 0, 0)
-    time.MSleep (50)
+    time.MSleep (1)
 
-PRI cmd(cmd_word) | cmd_long, cmd_byte
+PUB RHPct_Raw7(rh_pct): rh_raw
 
-  if cmd_word
-    cmd_long := ((SLAVE_WR | _addr_bit) << 16) | cmd_word
-    invert (@cmd_long)
-    i2c.start
-    _ackbit := i2c.pwrite (@cmd_long, 3)
-    if _ackbit == i2c#NAK
-      i2c.stop
-      return $DEADBEEF
-  else
-    return FALSE
+    case rh_pct
+        0..100:
+            return ( ( (rh_pct * _scale) / 100 * 65535) / _scale) & $FE00
+        OTHER:
+            return
+
+PUB RHRaw7_Pct(rh_raw): rh_pct
+
+    return rh_pct := ((100 * ((rh_raw & $FE00) * _scale)) / 65535) + {}32{ + error }
+
+PUB TempDeg_Raw9(temp_c): temp_raw
+' Takes degrees C and returns 9-bit value
+    temp_raw := (((( (temp_c) * _scale) + (45 * _scale)) / 175 * 65535) / _scale)
+    temp_raw := (temp_raw >> 7) & $001FF
+
+PUB TempRaw9_Deg(temp_raw): temp_c
+' Takes raw 9-bit value and returns temperature in
+'   hundredths of a degree C (0..511 -> -4500..12966 or -45.00C 129.66C)
+    case temp_raw
+        0..511:
+            temp_c := (temp_raw << 7)
+            return ((175 * (temp_c * _scale)) / 65535)-(45 * _scale)
+        OTHER:
+            return
 
 PRI readRegX(reg, nr_bytes, addr_buff) | cmd_packet[2], ackbit
-' Write nr_bytes to register 'reg' stored in val
-' If nr_bytes is
-'   0, It's a command that has no arguments - write the command only
-'   1, It's a command with a single byte argument - write the command, then the byte
-'   2, It's a command with two arguments - write the command, then the two bytes (encoded as a word)
+' Read nr_bytes from register 'reg' to address 'addr_buff'
+' Some registers have quirky behavior - handle it on a case-by-case basis
     cmd_packet.byte[0] := SLAVE_WR | _addr_bit
-    cmd_packet.byte[1] := reg.byte[1]           'Register MSB
-    cmd_packet.byte[2] := reg.byte[0]           'Register LSB
+    cmd_packet.byte[1] := reg.byte[MSB]                 'Register MSB
+    cmd_packet.byte[2] := reg.byte[LSB]                 'Register LSB
 
-    i2c.start                                   {S}
-    i2c.pwrite (@cmd_packet, 3)                 {SL|W . COMMAND MSB . COMMAND LSB}
+    i2c.start                                           {S}
+    ackbit := i2c.pwrite (@cmd_packet, 3)               {SL|W . COMMAND MSB . COMMAND LSB}
+    if ackbit == i2c#NAK
+        i2c.stop
+        return $DEAD
 
-    case reg                                    'Quirk handling
-        core#SHT3X_READ_SERIALNUM:              'S/N Read Needs delay before repeated start
+    case reg                                            'Quirk handling
+        core#SHT3X_READ_SERIALNUM:                      'S/N Read Needs delay before repeated start
             time.USleep (500)
             i2c.start                                   {Sr}
             ackbit := i2c.write (SLAVE_RD | _addr_bit)  {SL|R}
@@ -605,41 +502,49 @@ PRI readRegX(reg, nr_bytes, addr_buff) | cmd_packet[2], ackbit
         OTHER:
             i2c.start
             ackbit := i2c.write (SLAVE_RD | _addr_bit)
+
     if ackbit == i2c#NAK
-        i2c.stop                                'No data was available,
-        return -1                               ' so do nothing
-    i2c.pread (addr_buff, nr_bytes, TRUE)       {...}
-    i2c.stop                                    {P}
-    
+        i2c.stop                                        'No data was available,
+        return -1                                       ' so do nothing
+
+    i2c.pread (addr_buff, nr_bytes, TRUE)               {...}
+    i2c.stop                                            {P}
+
 PRI writeRegX(reg, nr_bytes, val) | cmd_packet[2]
 ' Write nr_bytes to register 'reg' stored in val
 ' If nr_bytes is
 '   0, It's a command that has no arguments - write the command only
 '   1, It's a command with a single byte argument - write the command, then the byte
 '   2, It's a command with two arguments - write the command, then the two bytes (encoded as a word)
+'   3, It's a command with two arguments and a CRC - write the command, then the two bytes (encoded as a word), lastly the CRC
     cmd_packet.byte[0] := SLAVE_WR | _addr_bit
 
     case nr_bytes
         0:
-            cmd_packet.byte[1] := reg.byte[1]       'Simple command
-            cmd_packet.byte[2] := reg.byte[0]       'Simple command
-
+            cmd_packet.byte[1] := reg.byte[MSB]       'Simple command
+            cmd_packet.byte[2] := reg.byte[LSB]
         1:
-            cmd_packet.byte[1] := reg.byte[1]       'Command w/1-byte argument
-            cmd_packet.byte[2] := reg.byte[0]       'Command w/1-byte argument
+            cmd_packet.byte[1] := reg.byte[MSB]       'Command w/1-byte argument
+            cmd_packet.byte[2] := reg.byte[LSB]
             cmd_packet.byte[3] := val
         2:
-            cmd_packet.byte[1] := reg.byte[1]       'Command w/2-byte argument
-            cmd_packet.byte[2] := reg.byte[0]       'Command w/2-byte argument
-            cmd_packet.byte[3] := val & $FF
-            cmd_packet.byte[4] := (val >> 8) & $FF
+            cmd_packet.byte[1] := reg.byte[MSB]       'Command w/2-byte argument
+            cmd_packet.byte[2] := reg.byte[LSB]
+            cmd_packet.byte[3] := val.byte[0]
+            cmd_packet.byte[4] := val.byte[1]
+        3:
+            cmd_packet.byte[1] := reg.byte[MSB]       'Command w/2-byte argument and CRC
+            cmd_packet.byte[2] := reg.byte[LSB]
+            cmd_packet.byte[3] := val.byte[0]
+            cmd_packet.byte[4] := val.byte[1]
+            cmd_packet.byte[5] := val.byte[2]
         OTHER:
             return
 
     i2c.start
     i2c.pwrite (@cmd_packet, 3 + nr_bytes)
     i2c.stop
-
+'    return val'cmd_packet' >> 8
 PRI compare(b1, b2)
 
   return b1 == b2
@@ -658,12 +563,6 @@ PRI crc8(data, len): crc | currbyte, i, j
         crc := (crc << 1)
   crc := crc ^ $00
   crc &= $FF
-
-PRI invert(ptr) | i, tmp
-
-  repeat i from 0 to 2
-    tmp.byte[2-i] := byte[ptr][i]
-  bytemove(ptr, @tmp, 3)
 
 DAT
 {

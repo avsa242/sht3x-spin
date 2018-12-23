@@ -53,11 +53,34 @@ VAR
   byte _measure_mode
   byte _disp_status_mode
   long _global_delay
+  long _scale
 
-PUB Main
+PUB Main | rh, temp, tmp, t
 
   Setup
+  sht3x.SetAllAlert (80, 25, 79, 24, 31, 15, 30, 14)'rh_hi_set, temp_hi_set, rh_hi_clr, temp_hi_clr, rh_lo_clr, temp_lo_clr, rh_lo_set, temp_lo_set)
+  ser.NewLine
+{
+  ser.Dec ( sht3x.RHRaw7_Pct ( sht3x.GetAlertLowSetRH))
+  ser.NewLine
+  ser.Dec ( sht3x.RHRaw7_Pct ( sht3x.GetAlertLowClearRH))
+  ser.NewLine
+  ser.Dec ( sht3x.RHRaw7_Pct ( sht3x.GetAlertHighSetRH))
+  ser.NewLine
+  ser.Dec ( sht3x.RHRaw7_Pct ( sht3x.GetAlertHighClearRH))
+  ser.NewLine
 
+  ser.Dec ( sht3x.TempRaw9_Deg ( sht3x.GetAlertLowSetTemp))'
+  ser.NewLine
+  ser.Dec ( sht3x.TempRaw9_Deg ( sht3x.GetAlertLowClearTemp))'
+  ser.NewLine
+  ser.Dec ( sht3x.TempRaw9_Deg ( sht3x.GetAlertHighSetTemp))'
+  ser.NewLine
+  ser.Dec ( sht3x.TempRaw9_Deg ( sht3x.GetAlertHighClearTemp))'
+  ser.NewLine
+
+  repeat
+}
   repeat
     case _demo_state
       CLEAR_STATUS:       ClearStatus
@@ -407,7 +430,7 @@ PUB Setup
   _mps := 0.5
   _repeatability := sht3x#LOW
   sht3x.SetRepeatability (_repeatability)
-  repeat until ser.CharIn == 13
+'  repeat until ser.CharIn == 13
 
 PUB Waiting
 
