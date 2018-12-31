@@ -63,7 +63,7 @@ PUB Main | rh, temp, tmp, t
 '    sht3x.SetAllAlert (rh_hi_set, rh_hi_clr, temp_hi_set, temp_hi_clr, rh_lo_set, rh_lo_clr, temp_lo_set, temp_lo_clr)
     sht3x.SetAllAlert (80, 79, 25, 24, 30, 31, 14, 15)
     ser.NewLine
-
+{
     ser.Dec (sht3x.RHRaw7_Pct (sht3x.GetAlertHighSetRH))
     ser.NewLine
     ser.Dec (sht3x.RHRaw7_Pct (sht3x.GetAlertHighClearRH))
@@ -83,7 +83,7 @@ PUB Main | rh, temp, tmp, t
     ser.NewLine
 
     repeat
-
+}
     repeat
         case _demo_state
             CLEAR_STATUS:       ClearStatus
@@ -111,22 +111,16 @@ PUB CycleMPS
     case _mps
         0.5:
             _mps := 1
-            sht3x.SetPeriodicRead (_mps)
         1:
             _mps := 2
-            sht3x.SetPeriodicRead (_mps)
         2:
             _mps := 4
-            sht3x.SetPeriodicRead (_mps)
         4:
             _mps := 10
-            sht3x.SetPeriodicRead (_mps)
         10:
             _mps := 0.5
-            sht3x.SetPeriodicRead (_mps)
         OTHER:
             _mps := 0.5
-            sht3x.SetPeriodicRead (_mps)
 
 PUB CycleRepeatability
 
@@ -143,6 +137,9 @@ PUB CycleRepeatability
         OTHER:
             _repeatability := sht3x#LOW
             sht3x.SetRepeatability (_repeatability)
+
+    if _demo_state == DISP_TEMP_RH_PER
+        sht3x.SetPeriodicRead (_mps)
 
 PUB DisplaySN | sn
 
@@ -288,8 +285,11 @@ PUB DisplayTempRH_Periodic | col, t, rh, tw, tf, rhw, rhf
         DecimalDot (sht3x.GetTempF)
         ser.Position (26, 12)
         DecimalDot (sht3x.GetRH)
+        ser.Position (0, 13)
+        ser.Hex (_tmp, 8)
         time.MSleep (_global_delay)
     sht3x.Break               'Tell the sensor to break out of periodic mode
+    _prev_state := DISP_TEMP_RH_PER
 
 PUB DisplayTempRH_OneShot | col
 

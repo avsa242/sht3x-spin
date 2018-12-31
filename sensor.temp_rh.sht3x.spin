@@ -370,78 +370,34 @@ PUB SetPeriodicRead(meas_per_sec) | cmdword, mps, repeatability
 '   threshold alarms. They do not work with one-shot readings.
 '*** Sensirion notes in their datasheet that at 10mps with repeatability set High,
 '***  self-heating of the sensor might occur.
-    case meas_per_sec'XXX Try rewriting case block to use lookup tables (for fewer LoC)
+    case meas_per_sec
         0, 5, 0.5:
             mps := $20
-            case _repeatability_mode
-                LOW:
-                    repeatability := $2F
-                MED:
-                    repeatability := $24
-                HIGH:
-                    repeatability := $32
-                OTHER:
-                    repeatability := $2F
+            repeatability := lookupz(_repeatability_mode: $2F, $24, $32)
         1:
             mps := $21
-            case _repeatability_mode
-                LOW:
-                    repeatability := $2D
-                MED:
-                    repeatability := $26
-                HIGH:
-                    repeatability := $30
-                OTHER:
-                    repeatability := $2D
+            repeatability := lookupz(_repeatability_mode: $2D, $26, $30)
         2:
             mps := $22
-            case _repeatability_mode
-                LOW:
-                    repeatability := $2B
-                MED:
-                    repeatability := $20
-                HIGH:
-                    repeatability := $36
-                OTHER:
-                    repeatability := $2B
+            repeatability := lookupz(_repeatability_mode: $2B, $20, $36)
         4:
             mps := $23
-            case _repeatability_mode
-                LOW:
-                    repeatability := $29
-                MED:
-                    repeatability := $22
-                HIGH:
-                    repeatability := $34
-                OTHER:
-                    repeatability := $29
+            repeatability := lookupz(_repeatability_mode: $29, $22, $34)
         10:
             mps := $27
-            case _repeatability_mode
-                LOW:
-                    repeatability := $2A
-                MED:
-                    repeatability := $21
-                HIGH:
-                    repeatability := $37
-                OTHER:
-                    repeatability := $2A
+            repeatability := lookupz(_repeatability_mode: $2A, $21, $37)
         OTHER:
             mps := $23
-            case _repeatability_mode
-                LOW:
-                    repeatability := $29
-                MED:
-                    repeatability := $22
-                HIGH:
-                    repeatability := $34
-                OTHER:
-                    repeatability := $29
+            repeatability := lookupz(_repeatability_mode: $29, $22, $34)
+
+    ifnot repeatability
+        return $DEADBEEF
     Break                                             'Stop any measurements that might be ongoing
     cmdword := (mps << 8) | repeatability
-    writeRegX(cmdword, 2, 0)
+    writeRegX(cmdword, 2, 0)'XXX nr_bytes should be 0, but this doesn't work??
+    return repeatability
 
-PUB SetRepeatability(mode)
+PUB SetRepeatability(mode)'XXX doesn't commit mode in periodic
 'Sets repeatability mode for subsequent temperature/RH measurements taken
 ' using either One-shot or Periodic mode
     case mode
