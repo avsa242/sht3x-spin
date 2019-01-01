@@ -3,9 +3,9 @@
     Filename: SHT3x-Demo.spin
     Author: Jesse Burt
     Description: Interactive Demo for the Sensirion SHT3x driver
-    Copyright (c) 2018
+    Copyright (c) 2019
     Started Mar 10, 2018
-    Updated Dec 23, 2018
+    Updated Jan 1, 2019
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -60,30 +60,9 @@ VAR
 PUB Main | rh, temp, tmp, t
 
     Setup
-'    sht3x.SetAllAlert (rh_hi_set, rh_hi_clr, temp_hi_set, temp_hi_clr, rh_lo_set, rh_lo_clr, temp_lo_set, temp_lo_clr)
-    sht3x.SetAllAlert (80, 79, 25, 24, 30, 31, 14, 15)
+'    sht3x.SetAlerts (rh_trig_hi, rh_ok_hi, rh_ok_lo, rh_trig_lo, temp_trig_hi, temp_ok_hi, temp_ok_lo, temp_trig_lo)
+    sht3x.SetAlerts (45, 42, 31, 30, 24, 22, 15, 14)
     ser.NewLine
-{
-    ser.Dec (sht3x.RHRaw7_Pct (sht3x.GetAlertHighSetRH))
-    ser.NewLine
-    ser.Dec (sht3x.RHRaw7_Pct (sht3x.GetAlertHighClearRH))
-    ser.NewLine
-    ser.Dec (sht3x.TempRaw9_Deg (sht3x.GetAlertHighSetTemp))
-    ser.NewLine
-    ser.Dec (sht3x.TempRaw9_Deg (sht3x.GetAlertHighClearTemp))
-    ser.NewLine
-
-    ser.Dec (sht3x.RHRaw7_Pct (sht3x.GetAlertLowSetRH))
-    ser.NewLine
-    ser.Dec (sht3x.RHRaw7_Pct (sht3x.GetAlertLowClearRH))
-    ser.NewLine
-    ser.Dec (sht3x.TempRaw9_Deg (sht3x.GetAlertLowSetTemp))
-    ser.NewLine
-    ser.Dec (sht3x.TempRaw9_Deg (sht3x.GetAlertLowClearTemp))
-    ser.NewLine
-
-    repeat
-}
     repeat
         case _demo_state
             CLEAR_STATUS:       ClearStatus
@@ -122,6 +101,9 @@ PUB CycleMPS
         OTHER:
             _mps := 0.5
 
+    if _demo_state == DISP_TEMP_RH_PER
+        sht3x.SetPeriodicRead (_mps)
+
 PUB CycleRepeatability
 
     case _repeatability
@@ -145,45 +127,47 @@ PUB DisplaySN | sn
 
     ser.Clear
     ser.Str (string("Sensor serial number: "))
-    sn := sht3x.GetSN
+    sn := sht3x.SerialNum
     ser.Hex (sn, 8)
     _demo_state := WAIT_STATE
 
 PUB DisplayStatus | status_word, col
 
     ser.Clear
-    ser.Str (string("Status word:", ser#NL))
     ser.Str (string("Pending Alerts:", ser#NL))
     ser.Str (string("Heater status:", ser#NL))
     ser.Str (string("RH Tracking Alert:", ser#NL))
     ser.Str (string("T Tracking Alert:", ser#NL))
     ser.Str (string("System Reset Detected:", ser#NL))
-    ser.Str (string("Command Status:", ser#NL))
-    ser.Str (string("Last write CRC status:", ser#NL))
 '                    |    |    |    |    |    |
 'col                 0....5....10...15...20...25
     col := 23
     repeat until _demo_state <> DISP_STATUS
-        status_word := sht3x.GetStatus
-        ser.Position (col, 0)
-        ser.Hex (status_word, 4)
-        case sht3x.IsAlertPending
+        case sht3x.Alert
             FALSE:
-                ser.Position (col, 1)
+                ser.Position (col, 0)
                 ser.Str (string("NO"))
             TRUE:
-                ser.Position (col, 1)
+                ser.Position (col, 0)
                 ser.Str (string("YES"))
 
         case sht3x.GetHeaterStatus
             FALSE:
-                ser.Position (col, 2)
+                ser.Position (col, 1)
                 ser.Str (string("OFF"))
             TRUE:
-                ser.Position (col, 2)
+                ser.Position (col, 1)
                 ser.Str (string("ON"))
 
-        case sht3x.IsRHTrack_Alert
+        case sht3x.Alert_RH
+            FALSE:
+                ser.Position (col, 2)
+                ser.Str (string("NO"))
+            TRUE:
+                ser.Position (col, 2)
+                ser.Str (string("YES"))
+
+        case sht3x.Alert_Temp
             FALSE:
                 ser.Position (col, 3)
                 ser.Str (string("NO"))
@@ -191,37 +175,13 @@ PUB DisplayStatus | status_word, col
                 ser.Position (col, 3)
                 ser.Str (string("YES"))
 
-        case sht3x.IsTempTrack_Alert
+        case sht3x.ResetDetected
             FALSE:
                 ser.Position (col, 4)
                 ser.Str (string("NO"))
             TRUE:
                 ser.Position (col, 4)
                 ser.Str (string("YES"))
-
-        case sht3x.GetResetStatus
-            FALSE:
-                ser.Position (col, 5)
-                ser.Str (string("NO"))
-            TRUE:
-                ser.Position (col, 5)
-                ser.Str (string("YES"))
-
-        case sht3x.GetLastCmdStatus
-            FALSE:
-                ser.Position (col, 6)
-                ser.Str (string("SUCCESSFUL"))
-            TRUE:
-                ser.Position (col, 6)
-                ser.Str (string("NOT PROCESSED"))
-
-        case sht3x.GetLastCRCStatus
-            FALSE:
-                ser.Position (col, 7)
-                ser.Str (string("CRC CORRECT"))
-            TRUE:
-                ser.Position (col, 7)
-                ser.Str (string("CRC INCORRECT"))
 
         time.MSleep (_global_delay)
 
@@ -256,7 +216,7 @@ PUB DisplayTempRH_Periodic | col, t, rh, tw, tf, rhw, rhf
                 ser.Dec (_mps)
                 ser.Chars (32, 2)
 
-        case sht3x.IsRHTrack_Alert
+        case sht3x.Alert_RH
             TRUE:
                 ser.Position (col, 9)
                 ser.Str (string("YES"))
@@ -264,7 +224,7 @@ PUB DisplayTempRH_Periodic | col, t, rh, tw, tf, rhw, rhf
                 ser.Position (col, 9)
                 ser.Str (string("NO "))
 
-        case sht3x.IsTempTrack_Alert
+        case sht3x.Alert_Temp
             TRUE:
                 ser.Position (col, 10)
                 ser.Str (string("YES"))
@@ -285,8 +245,6 @@ PUB DisplayTempRH_Periodic | col, t, rh, tw, tf, rhw, rhf
         DecimalDot (sht3x.GetTempF)
         ser.Position (26, 12)
         DecimalDot (sht3x.GetRH)
-        ser.Position (0, 13)
-        ser.Hex (_tmp, 8)
         time.MSleep (_global_delay)
     sht3x.Break               'Tell the sensor to break out of periodic mode
     _prev_state := DISP_TEMP_RH_PER

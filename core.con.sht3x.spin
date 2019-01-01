@@ -2,9 +2,9 @@
     --------------------------------------------
     Filename: core.con.sht3x.spin
     Author: Jesse Burt
-    Copyright (c) 2018
+    Copyright (c) 2019
     Started Nov 19, 2017
-    Updated Dec 23, 2018
+    Updated Jan 1, 2019
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -26,6 +26,13 @@ CON
     SHT3X_MEAS_LOWREP           = $2416
     SHT3X_FETCHDATA             = $E000
     SHT3X_READSTATUS            = $F32D
+        SHT3X_STATUS_ALERT      = 15
+        SHT3X_STATUS_HEATER     = 13
+        SHT3X_STATUS_RHALERT    = 11
+        SHT3X_STATUS_TEMPALERT  = 10
+        SHT3X_STATUS_RESET      = 4
+        SHT3X_STATUS_CMDSTAT    = 1
+        SHT3X_STATUS_CMDCRC     = 0
     SHT3X_CLEARSTATUS           = $3041
     SHT3X_SOFTRESET             = $30A2
     SHT3X_HEATEREN              = $306D

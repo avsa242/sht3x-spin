@@ -3,9 +3,9 @@
     Filename: sensor.temp_rh.sht3x.spin
     Author: Jesse Burt
     Description: Driver for Sensirion's SHT3X Temperature/RH Sensors
-    Copyright (c) 2018
+    Copyright (c) 2019
     Started Nov 19, 2017
-    Updated Dec 23, 2018
+    Updated Jan 1, 2019
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -81,19 +81,19 @@ PUB Alert
 'Get Alert status
 '   FALSE   - No alerts
 '   TRUE    - At least one alert pending
-    return ((readReg_STATUS >> 15) & %1) * TRUE
+    return ((readReg_STATUS >> core#SHT3X_STATUS_ALERT) & %1) * TRUE
 
 PUB Alert_RH
 'RH Tracking Alert
 '   FALSE   - No alert
 '   TRUE    - Alert
-    return ((readReg_STATUS >> 11) & %1) * TRUE
+    return ((readReg_STATUS >> core#SHT3X_STATUS_RHALERT) & %1) * TRUE
 
 PUB Alert_Temp
 'Temp Tracking Alert
 ' FALSE   - No alert
 ' TRUE    - Alert
-    return ((readReg_STATUS >> 10) & %1) * TRUE
+    return ((readReg_STATUS >> core#SHT3X_STATUS_TEMPALERT) & %1) * TRUE
 
 PUB Break
 'Stop Periodic Data Acquisition Mode
@@ -102,7 +102,7 @@ PUB Break
 
 PUB ClearStatus
 'Clears bits 15, 11, 10, and 4 in the status register
-    writeRegX( core#SHT3X_CLEARSTATUS, 0, 0)
+    writeRegX(core#SHT3X_CLEARSTATUS, 0, 0)
 
 PUB FetchData | read_data[2], ms_word, ms_crc, ls_word, ls_crc
 'Get Temperature and RH data when sensor is in Periodic mode
@@ -120,7 +120,7 @@ PUB GetHeaterStatus
 '   Returns
 '       FALSE   - OFF
 '       TRUE    - ON
-    return ((readReg_STATUS >> 13) & %1) * TRUE
+    return ((readReg_STATUS >> core#SHT3X_STATUS_HEATER) & %1) * TRUE
 
 PUB GetRH
 'Return Calculated Relative Humidity in hundreths of a percent
@@ -138,17 +138,17 @@ PUB GetTempC
 
 PUB GetTempF
 'Return Calculated temperature in hundredths of a degree Fahrenheit
-'   e.g., 21.05C would return 2105
+'   e.g., 70.05C would return 7005
     return ((315 * (_temp_word * _scale)) / 65535)-(49 * _scale)
 
 PUB GetTemp_Raw
 'Return uncalculated Temperature as a 16-bit word
-'   e.g., 70.50C would return 7050
     return _temp_word & $FFFF
 
 PUB ReadTempRH | read_data[2], repeatability
 'Get Temperature and RH data from sensor (one-shot mode)
 ' with repeatability level LOW, MED, HIGH
+'Returns temperature in high word, RH in low word
     case _repeatability_mode
         LOW:
             repeatability := core#SHT3X_MEAS_LOWREP_STRETCH
@@ -164,7 +164,7 @@ PUB ReadTempRH | read_data[2], repeatability
     _rh_word := (read_data.byte[3] << 8) | read_data.byte[4]
     return (_temp_word << 16) | (_rh_word)
 
-PUB GetAlertHighSet | read_crc, read_data
+PUB GetAlertTrig_High | read_crc, read_data
 'Returns High Alarm threshold trigger settings
 '   Upper 7 bits - Humidity limit
 '   Lower 9 bits - Temperature limit (deg C)
@@ -172,67 +172,66 @@ PUB GetAlertHighSet | read_crc, read_data
     read_crc := read_data.byte[2]
     result := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
 
-    if compare(crc8(@result, 2), read_crc)
+    if crcgood(@result, read_crc)
         return result
     else
         return $DEADBEEF
 
-PUB GetAlertHighSetRH
+PUB GetAlertTrig_HighRH
 'Returns RH High Alarm threshold trigger settings as
 '   7-bit value in MSB
-    return GetAlertHighSet & $FE00
+    return GetAlertTrig_High & $FE00
 
-PUB GetAlertHighSetTemp
+PUB GetAlertTrig_HighTemp
 'Returns Temperature High Alarm threshold trigger settings as
 '   9-bit value in LSB
-    return (GetAlertHighSet & $1FF)
+    return (GetAlertTrig_High & $1FF)
 
-PUB GetAlertHighClear | read_crc, read_data
+PUB GetAlertOk_High | read_crc, read_data
 'Returns High Alarm threshold clear settings
 '   Upper 7 bits - Humidity limit
 '   Lower 9 bits - Temperature limit (deg C)
-
-    readRegX( core#SHT3X_ALERTLIM_RD_HI_CLR, 3, @read_data)
+    readRegX(core#SHT3X_ALERTLIM_RD_HI_CLR, 3, @read_data)
     read_crc := read_data.byte[2]
     result := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
 
-    if compare(crc8(@result, 2), read_crc)
+    if crcgood(@result, read_crc)
         return result
     else
         return FALSE
 
-PUB GetAlertHighClearRH
+PUB GetAlertOk_HighRH
 'Returns RH High Alarm threshold clear settings as
 '   7-bit value in MSB
-    return GetAlertHighClear & $FE00
+    return GetAlertOk_High & $FE00
 
-PUB GetAlertHighClearTemp
+PUB GetAlertOk_HighTemp
 'Returns Temperature High Alarm threshold clear settings as
 '   9-bit value in LSB
-    return GetAlertHighClear & $1FF
+    return GetAlertOk_High & $1FF
 
-PUB GetAlertLowClear | read_crc, read_data
+PUB GetAlertOk_Low | read_crc, read_data
 'Returns Low Alarm threshold clear settings
 '   Upper 7 bits - Humidity limit
 '   Lower 9 bits - Temperature limit (deg C)
-    readRegX( core#SHT3X_ALERTLIM_RD_LO_CLR, 3, @read_data)
+    readRegX(core#SHT3X_ALERTLIM_RD_LO_CLR, 3, @read_data)
     read_crc := read_data.byte[2]
     result := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
 
-    if compare(crc8(@result, 2), read_crc)
+    if crcgood(@result, read_crc)
         return result
     else
         return FALSE
 
-PUB GetAlertLowClearRH
+PUB GetAlertOk_LowRH
 
-    return GetAlertLowClear & $FE00
+    return GetAlertOk_Low & $FE00
 
-PUB GetAlertLowClearTemp
+PUB GetAlertOk_LowTemp
 
-    return GetAlertLowClear & $1FF
+    return GetAlertOk_Low & $1FF
 
-PUB GetAlertLowSet | read_crc, read_data
+PUB GetAlertTrig_Low | read_crc, read_data
 'Returns Low Alarm threshold set settings
 '   Upper 7 bits - Humidity limit
 '   Lower 9 bits - Temperature limit (deg C)
@@ -240,18 +239,18 @@ PUB GetAlertLowSet | read_crc, read_data
     read_crc := read_data.byte[2]
     result := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
 
-    if compare(crc8(@result, 2), read_crc)
+    if crcgood(@result, read_crc)
         return result
     else
         return FALSE
 
-PUB GetAlertLowSetRH
+PUB GetAlertTrig_LowRH
 
-    return GetAlertLowSet & $FE00
+    return GetAlertTrig_Low & $FE00
 
-PUB GetAlertLowSetTemp
+PUB GetAlertTrig_LowTemp
 
-    return GetAlertLowSet & $1FF
+    return GetAlertTrig_Low & $1FF
 
 PUB SerialNum | read_data[2], ms_word, ls_word, ms_crc, ls_crc
 'Read 32bit serial number from SHT3x (*not found in datasheet)
@@ -261,19 +260,19 @@ PUB SerialNum | read_data[2], ms_word, ls_word, ms_crc, ls_crc
     ls_word := ((read_data.byte[3] << 8) | read_data.byte[4]) & $FFFF
     ls_crc := read_data.byte[5]
 
-    if compare(crc8(@ms_word, 2), ms_crc) AND compare(crc8(@ls_word, 2), ls_crc)
+    if crcgood(@ms_word, ms_crc) AND crcgood(@ls_word, ls_crc)
         return (ms_word << 16) | ls_word
     else
         return FALSE                                    'Return implausible value if CRC check failed
 
 PUB SetAlerts(rh_trig_hi, rh_ok_hi, rh_ok_lo, rh_trig_lo, temp_trig_hi, temp_ok_hi, temp_ok_lo, temp_trig_lo)
 ' Set all alert thresholds at once
-    SetAlertHigh_Set (rh_trig_hi, temp_trig_hi)
-    SetAlertHigh_Clr (rh_ok_hi, temp_ok_hi)
-    SetAlertLow_Clr (rh_ok_lo, temp_ok_lo)
-    SetAlertLow_Set (rh_trig_lo, temp_trig_lo)
+    SetAlertTrig_Hi (rh_trig_hi, temp_trig_hi)
+    SetAlertOk_Hi (rh_ok_hi, temp_ok_hi)
+    SetAlertOk_Lo (rh_ok_lo, temp_ok_lo)
+    SetAlertTrig_Lo (rh_trig_lo, temp_trig_lo)
 
-PUB SetAlertHigh_Set(rh_set, temp_set) | rht, tt, crct, tmp, write_data
+PUB SetAlertTrig_Hi(rh_set, temp_set) | rht, tt, crct, tmp, write_data
 ' Set high alarm trigger threshold for RH and Temp
     rht := RHPct_Raw7 (rh_set)
     tt := TempDeg_Raw9 (temp_set)
@@ -285,7 +284,7 @@ PUB SetAlertHigh_Set(rh_set, temp_set) | rht, tt, crct, tmp, write_data
 
     writeRegX(core#SHT3X_ALERTLIM_WR_HI_SET, 3, write_data)
 
-PUB SetAlertHigh_Clr(rh_clr, temp_clr) | rht, tt, write_data, crct, tmp
+PUB SetAlertOk_Hi(rh_clr, temp_clr) | rht, tt, write_data, crct, tmp
 ' Set high alarm clear threshold for RH and Temp
     rht := RHPct_Raw7 (rh_clr)
     tt := TempDeg_Raw9 (temp_clr)
@@ -297,7 +296,7 @@ PUB SetAlertHigh_Clr(rh_clr, temp_clr) | rht, tt, write_data, crct, tmp
 
     writeRegX(core#SHT3X_ALERTLIM_WR_HI_CLR, 3, write_data)
 
-PUB SetAlertLow_Clr(rh_clr, temp_clr) | rht, tt, write_data, crct, tmp
+PUB SetAlertOk_Lo(rh_clr, temp_clr) | rht, tt, write_data, crct, tmp
 ' Set low alarm clear threshold for RH and Temp
     rht := RHPct_Raw7 (rh_clr)
     tt := TempDeg_Raw9 (temp_clr)
@@ -309,7 +308,7 @@ PUB SetAlertLow_Clr(rh_clr, temp_clr) | rht, tt, write_data, crct, tmp
 
     writeRegX(core#SHT3X_ALERTLIM_WR_LO_CLR, 3, write_data)
 
-PUB SetAlertLow_Set(rh_set, temp_set) | rht, tt, write_data, crct, tmp
+PUB SetAlertTrig_Lo(rh_set, temp_set) | rht, tt, write_data, crct, tmp
 ' Set low alarm trigger threshold for RH and Temp
     rht := RHPct_Raw7 (rh_set)
     tt := TempDeg_Raw9 (temp_set)
@@ -336,7 +335,7 @@ PUB ResetDetected
 '   Returns
 '      FALSE   - No reset since last 'clear status register'
 '       TRUE    - reset detected (hard reset, soft reset, power fail)
-    return ((readReg_STATUS >> 4) & %1) * TRUE
+    return ((readReg_STATUS >> core#SHT3X_STATUS_RESET) & %1) * TRUE
 
 PUB SetPeriodicRead(meas_per_sec) | cmdword, mps, repeatability
 'Sets number of measurements per second the sensor should take
@@ -424,11 +423,11 @@ PRI readReg_STATUS| read_data, status_crc
     readRegX(core#SHT3X_READSTATUS, 3, @read_data)
     result := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
     status_crc := read_data.byte[2]
-    if compare (crc8(@result, 2), status_crc)
+    if crcgood(@result, status_crc)
         return result
     else
         return $53EC                                    'Return invalid value if CRC check failed
-                                                    '(sets all 'Reserved' bits, which should normally be 0)
+                                                        '(sets all 'Reserved' bits, which should normally be 0)
 PRI lastCRCStatus
 'Write data checksum status
 '   Returns
@@ -441,7 +440,7 @@ PRI cmdStatus
 '   Returns
 '       FALSE   - Last command executed successfully
 '       TRUE    - Last command not processed. Invalid or failed integrated checksum
-    return ((readReg_STATUS >> 1) & %1) * TRUE
+    return ((readReg_STATUS >> core#SHT3X_STATUS_CMDSTAT) & %1) * TRUE
 
 PRI readRegX(reg, nr_bytes, addr_buff) | cmd_packet[2], ackbit
 'Read nr_bytes from register 'reg' to address 'addr_buff'
@@ -462,8 +461,8 @@ PRI readRegX(reg, nr_bytes, addr_buff) | cmd_packet[2], ackbit
             i2c.start
             ackbit := i2c.write (SLAVE_RD | _addr_bit)
         core#SHT3X_MEAS_HIGHREP_STRETCH..core#SHT3X_MEAS_LOWREP_STRETCH:
-            i2c.stop    ' Measurements with clock-stretching don't
-            i2c.start   ' seem to work without this STOP condition
+            i2c.stop                                    ' Measurements with clock-stretching don't
+            i2c.start                                   ' seem to work without this STOP condition
             ackbit := i2c.write (SLAVE_RD | _addr_bit)
             i2c.stop
         OTHER:
@@ -516,6 +515,10 @@ PRI compare(b1, b2)
 'Compare b1 to b2
 '   Returns TRUE if equal
     return b1 == b2
+
+PRI crcgood(calc_crc, rcvd_crc)
+
+    return crc8(calc_crc, 2) == rcvd_crc
 
 PRI crc8(data, len) | currbyte, i, j, crc
 'Calculate CRC8 of data with length 'len' bytes at address 'data'
