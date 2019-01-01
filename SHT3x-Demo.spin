@@ -374,7 +374,9 @@ PUB Setup
         sht3x.Stop
         repeat
     else
-        ser.Str (string("SHT3x object started on cog "))
+        ser.Str (string("SHT3x object (S/N "))
+        ser.Hex (sht3x.SerialNum, 8)
+        ser.Str (string(") started on cog "))
         ser.Dec (_sht3x_cog-1)
         ser.NewLine
 
