@@ -77,6 +77,24 @@ PUB Stop
 
     i2c.terminate
 
+PUB Alert
+'Get Alert status
+'   FALSE   - No alerts
+'   TRUE    - At least one alert pending
+    return ((GetStatus >> 15) & %1) * TRUE
+
+PUB Alert_RH
+'RH Tracking Alert
+'   FALSE   - No alert
+'   TRUE    - Alert
+    return ((GetStatus >> 11) & %1) * TRUE
+
+PUB Alert_Temp
+'Temp Tracking Alert
+' FALSE   - No alert
+' TRUE    - Alert
+    return ((GetStatus >> 10) & %1) * TRUE
+
 PUB Break
 'Stop Periodic Data Acquisition Mode
 ' Use this when you wish to return to One-shot mode from Periodic Mode
@@ -104,58 +122,15 @@ PUB GetHeaterStatus
 '       TRUE    - ON
     return ((GetStatus >> 13) & %1) * TRUE
 
-PUB GetLastCmdStatus
-'Command status
-'   Returns
-'       FALSE   - Last command executed successfully
-'       TRUE    - Last command not processed. Invalid or failed integrated checksum
-    return ((GetStatus >> 1) & %1) * TRUE
-
-PUB GetLastCRCStatus
-'Write data checksum status
-'   Returns
-'       FALSE   - Checksum of last transfer was correct
-'       TRUE    - Checksum of last transfer write failed
-    return (GetStatus & %1) * TRUE
-
-PUB GetResetStatus
-'Check for System Reset
-'   Returns
-'      FALSE   - No reset since last 'clear status register'
-'       TRUE    - reset detected (hard reset, soft reset, power fail)
-    return ((GetStatus >> 4) & %1) * TRUE
-
 PUB GetRH
-'Return Relative Humidity in hundreths of a percent
+'Return Calculated Relative Humidity in hundreths of a percent
+'   e.g., 32.15% would return 3215
     return (100 * (_rh_word * _scale)) / 65535
 
 PUB GetRH_Raw
 'Return Humidity as a 16-bit word
     return _rh_word & $FFFF
 
-PUB GetSN | read_data[2], ms_word, ls_word, ms_crc, ls_crc
-'Read 32bit serial number from SHT3x (*not found in datasheet)
-    readRegX(core#SHT3X_READ_SERIALNUM, 6, @read_data)
-    ms_word := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
-    ms_crc := read_data.byte[2]
-    ls_word := ((read_data.byte[3] << 8) | read_data.byte[4]) & $FFFF
-    ls_crc := read_data.byte[5]
-    
-    if compare(crc8(@ms_word, 2), ms_crc) AND compare(crc8(@ls_word, 2), ls_crc)
-        return (ms_word << 16) | ls_word
-    else
-        return FALSE                                    'Return implausible value if CRC check failed
-
-PUB GetStatus | read_data, status_crc
-'Read SHT3x status register
-    readRegX(core#SHT3X_READSTATUS, 3, @read_data)
-    result := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
-    status_crc := read_data.byte[2]
-    if compare (crc8(@result, 2), status_crc)
-        return result
-    else
-        return $53EC                                    'Return invalid value if CRC check failed
-                                                    '(sets all 'Reserved' bits, which should normally be 0)
 PUB GetTempC
 'Return Calculated temperature in hundredths of a degree Celsius
 '   e.g., 21.05C would return 2105
@@ -170,24 +145,6 @@ PUB GetTemp_Raw
 'Return uncalculated Temperature as a 16-bit word
 '   e.g., 70.50C would return 7050
     return _temp_word & $FFFF
-
-PUB IsAlertPending
-'Get Alert status
-'   FALSE   - No alerts
-'   TRUE    - At least one alert pending
-    return ((GetStatus >> 15) & %1) * TRUE
-
-PUB IsRHTrack_Alert
-'RH Tracking Alert
-'   FALSE   - No alert
-'   TRUE    - Alert
-    return ((GetStatus >> 11) & %1) * TRUE
-
-PUB IsTempTrack_Alert
-'Temp Tracking Alert
-' FALSE   - No alert
-' TRUE    - Alert
-    return ((GetStatus >> 10) & %1) * TRUE
 
 PUB ReadTempRH | read_data[2], repeatability
 'Get Temperature and RH data from sensor (one-shot mode)
@@ -296,6 +253,19 @@ PUB GetAlertLowSetTemp
 
     return GetAlertLowSet & $1FF
 
+PUB SerialNum | read_data[2], ms_word, ls_word, ms_crc, ls_crc
+'Read 32bit serial number from SHT3x (*not found in datasheet)
+    readRegX(core#SHT3X_READ_SERIALNUM, 6, @read_data)
+    ms_word := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
+    ms_crc := read_data.byte[2]
+    ls_word := ((read_data.byte[3] << 8) | read_data.byte[4]) & $FFFF
+    ls_crc := read_data.byte[5]
+
+    if compare(crc8(@ms_word, 2), ms_crc) AND compare(crc8(@ls_word, 2), ls_crc)
+        return (ms_word << 16) | ls_word
+    else
+        return FALSE                                    'Return implausible value if CRC check failed
+
 PUB SetAllAlert(rh_hi_set, rh_hi_clr, temp_hi_set, temp_hi_clr, rh_lo_set, rh_lo_clr, temp_lo_set, temp_lo_clr)
 ' Set all alert thresholds at once
     SetAlertHigh_Set (rh_hi_set, temp_hi_set)
@@ -360,6 +330,13 @@ PUB EnableHeater(enabled)
         OTHER:
             return
     writeRegX(enabled, 0, 0)
+
+PUB ResetDetected
+'Check for System Reset
+'   Returns
+'      FALSE   - No reset since last 'clear status register'
+'       TRUE    - reset detected (hard reset, soft reset, power fail)
+    return ((GetStatus >> 4) & %1) * TRUE
 
 PUB SetPeriodicRead(meas_per_sec) | cmdword, mps, repeatability
 'Sets number of measurements per second the sensor should take
@@ -441,6 +418,30 @@ PUB TempRaw9_Deg(temp_raw)
             return ((175 * (result * _scale)) / 65535)-(45 * _scale)
         OTHER:
             return
+
+PRI readReg_STATUS| read_data, status_crc
+'Read SHT3x status register
+    readRegX(core#SHT3X_READSTATUS, 3, @read_data)
+    result := ((read_data.byte[0] << 8) | read_data.byte[1]) & $FFFF
+    status_crc := read_data.byte[2]
+    if compare (crc8(@result, 2), status_crc)
+        return result
+    else
+        return $53EC                                    'Return invalid value if CRC check failed
+                                                    '(sets all 'Reserved' bits, which should normally be 0)
+PRI lastCRCStatus
+'Write data checksum status
+'   Returns
+'       FALSE   - Checksum of last transfer was correct
+'       TRUE    - Checksum of last transfer write failed
+    return (GetStatus & %1) * TRUE
+
+PRI cmdStatus
+'Command status
+'   Returns
+'       FALSE   - Last command executed successfully
+'       TRUE    - Last command not processed. Invalid or failed integrated checksum
+    return ((GetStatus >> 1) & %1) * TRUE
 
 PRI readRegX(reg, nr_bytes, addr_buff) | cmd_packet[2], ackbit
 'Read nr_bytes from register 'reg' to address 'addr_buff'
