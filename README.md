@@ -1,5 +1,5 @@
 # sht3x-spin
---------------
+------------
 
 This is a P8X32A/Propeller driver object for Sensirion's SHT3x (30, 31, 35) line of combination temperature and relative humidity sensors.
 
@@ -14,6 +14,12 @@ This is a P8X32A/Propeller driver object for Sensirion's SHT3x (30, 31, 35) line
 * Supports reading the sensor's serial number
 * Supports setting alert thresholds
 
-## TODO
-* Massive code cleanup
+## Example Code
+* Semi-interactive serial terminal-based demo
+* Digital thermometer/hygrometer on a 4DSystems uOLED-128-G2 display
 
+## TODO
+* Massive code cleanup (esp., alerts API)
+* Support runtime switchable CRC-checking of received data
+* Demo code to test alerts waking up a Propeller from a low-power state
+* Possible compact driver variant that uses a SPIN-based I2C driver and a minimalist API
