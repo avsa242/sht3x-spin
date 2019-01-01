@@ -81,19 +81,19 @@ PUB Alert
 'Get Alert status
 '   FALSE   - No alerts
 '   TRUE    - At least one alert pending
-    return ((GetStatus >> 15) & %1) * TRUE
+    return ((readReg_STATUS >> 15) & %1) * TRUE
 
 PUB Alert_RH
 'RH Tracking Alert
 '   FALSE   - No alert
 '   TRUE    - Alert
-    return ((GetStatus >> 11) & %1) * TRUE
+    return ((readReg_STATUS >> 11) & %1) * TRUE
 
 PUB Alert_Temp
 'Temp Tracking Alert
 ' FALSE   - No alert
 ' TRUE    - Alert
-    return ((GetStatus >> 10) & %1) * TRUE
+    return ((readReg_STATUS >> 10) & %1) * TRUE
 
 PUB Break
 'Stop Periodic Data Acquisition Mode
@@ -120,7 +120,7 @@ PUB GetHeaterStatus
 '   Returns
 '       FALSE   - OFF
 '       TRUE    - ON
-    return ((GetStatus >> 13) & %1) * TRUE
+    return ((readReg_STATUS >> 13) & %1) * TRUE
 
 PUB GetRH
 'Return Calculated Relative Humidity in hundreths of a percent
@@ -266,12 +266,12 @@ PUB SerialNum | read_data[2], ms_word, ls_word, ms_crc, ls_crc
     else
         return FALSE                                    'Return implausible value if CRC check failed
 
-PUB SetAllAlert(rh_hi_set, rh_hi_clr, temp_hi_set, temp_hi_clr, rh_lo_set, rh_lo_clr, temp_lo_set, temp_lo_clr)
+PUB SetAlerts(rh_trig_hi, rh_ok_hi, rh_ok_lo, rh_trig_lo, temp_trig_hi, temp_ok_hi, temp_ok_lo, temp_trig_lo)
 ' Set all alert thresholds at once
-    SetAlertHigh_Set (rh_hi_set, temp_hi_set)
-    SetAlertHigh_Clr (rh_hi_clr, temp_hi_clr)
-    SetAlertLow_Clr (rh_lo_clr, temp_lo_clr)
-    SetAlertLow_Set (rh_lo_set, temp_lo_set)
+    SetAlertHigh_Set (rh_trig_hi, temp_trig_hi)
+    SetAlertHigh_Clr (rh_ok_hi, temp_ok_hi)
+    SetAlertLow_Clr (rh_ok_lo, temp_ok_lo)
+    SetAlertLow_Set (rh_trig_lo, temp_trig_lo)
 
 PUB SetAlertHigh_Set(rh_set, temp_set) | rht, tt, crct, tmp, write_data
 ' Set high alarm trigger threshold for RH and Temp
@@ -336,7 +336,7 @@ PUB ResetDetected
 '   Returns
 '      FALSE   - No reset since last 'clear status register'
 '       TRUE    - reset detected (hard reset, soft reset, power fail)
-    return ((GetStatus >> 4) & %1) * TRUE
+    return ((readReg_STATUS >> 4) & %1) * TRUE
 
 PUB SetPeriodicRead(meas_per_sec) | cmdword, mps, repeatability
 'Sets number of measurements per second the sensor should take
@@ -434,14 +434,14 @@ PRI lastCRCStatus
 '   Returns
 '       FALSE   - Checksum of last transfer was correct
 '       TRUE    - Checksum of last transfer write failed
-    return (GetStatus & %1) * TRUE
+    return (readReg_STATUS & %1) * TRUE
 
 PRI cmdStatus
 'Command status
 '   Returns
 '       FALSE   - Last command executed successfully
 '       TRUE    - Last command not processed. Invalid or failed integrated checksum
-    return ((GetStatus >> 1) & %1) * TRUE
+    return ((readReg_STATUS >> 1) & %1) * TRUE
 
 PRI readRegX(reg, nr_bytes, addr_buff) | cmd_packet[2], ackbit
 'Read nr_bytes from register 'reg' to address 'addr_buff'
