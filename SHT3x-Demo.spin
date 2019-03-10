@@ -150,7 +150,7 @@ PUB DisplayStatus | status_word, col
                 ser.Position (col, 0)
                 ser.Str (string("YES"))
 
-        case sht3x.GetHeaterStatus
+        case sht3x.Heater (-2)
             FALSE:
                 ser.Position (col, 1)
                 ser.Str (string("OFF"))
@@ -294,12 +294,12 @@ PUB SoftReset
 PUB ToggleHeater
 
     time.MSleep (_global_delay)
-    case sht3x.GetHeaterStatus
+    case sht3x.Heater (-2)
         FALSE:
-            sht3x.EnableHeater (TRUE)
+            sht3x.Heater (TRUE)
             ser.Str (string(ser#NL, "Heater enabled", ser#NL))
         OTHER:
-            sht3x.EnableHeater (FALSE)
+            sht3x.Heater (FALSE)
             ser.Str (string(ser#NL, "Heater disabled", ser#NL))
     _demo_state := WAIT_STATE
 
@@ -364,25 +364,22 @@ PUB Setup
 
     repeat until _ser_cog := ser.StartRxTx (TERM_RX, TERM_TX, 0, TERM_BAUD)
     ser.Clear
-    ser.Str (string("Serial IO started on cog "))
-    ser.Dec (_ser_cog-1)
+    ser.Str (string("Serial terminal started"))
     ser.NewLine
 
-    ifnot _sht3x_cog := sht3x.Startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT)
-        ser.Str (string("SHT3x object failed to start...halting"))
-        sht3x.Stop
-        repeat
-    else
+    if _sht3x_cog := sht3x.Startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT)
         ser.Str (string("SHT3x object (S/N "))
         ser.Hex (sht3x.SerialNum, 8)
-        ser.Str (string(") started on cog "))
-        ser.Dec (_sht3x_cog-1)
+        ser.Str (string(") started"))
         ser.NewLine
+    else
+        ser.Str (string("SHT3x object failed to start - halting"))
+        sht3x.Stop
+        time.MSleep (500)
+        ser.Stop
+        flash(cfg#LED1)
 
     _keyDaemon_cog := cognew(keyDaemon, @_keyDaemon_stack)
-    ser.Str (string("Terminal input daemon started on cog "))
-    ser.Dec (_keyDaemon_cog)
-    ser.NewLine
 
     '' Establish some initial settings
     _global_delay := 100
@@ -395,6 +392,13 @@ PUB Waiting
 
     ser.Str (string(ser#NL, "Press any key to continue (ESC to return to previous demo)..."))
     repeat until _demo_state <> WAIT_STATE
+
+PUB flash(led_pin)
+
+    dira[led_pin] := 1
+    repeat
+        !outa[led_pin]
+        time.MSleep (500)
 
 DAT
 
