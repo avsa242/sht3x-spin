@@ -9,7 +9,6 @@
     See end of file for terms of use.
     --------------------------------------------
 }
-
 CON
 
     _clkmode        = cfg#_clkmode  'Clock settings pulled from cfg object
@@ -41,7 +40,7 @@ CON
 
 OBJ
 
-    cfg   : "core.con.client.demoboard"
+    cfg   : "core.con.boardcfg.flip"
     ser   : "com.serial.terminal"
     time  : "time"
     sht3x : "sensor.temp_rh.sht3x"
