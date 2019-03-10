@@ -5,7 +5,7 @@
     Description: Interactive Demo for the Sensirion SHT3x driver
     Copyright (c) 2019
     Started Mar 10, 2018
-    Updated Jan 1, 2019
+    Updated Mar 10, 2019
     See end of file for terms of use.
     --------------------------------------------
 }

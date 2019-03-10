@@ -2,9 +2,10 @@
     --------------------------------------------
     Filename: core.con.sht3x.spin
     Author: Jesse Burt
+    Description: Low-level constants
     Copyright (c) 2019
     Started Nov 19, 2017
-    Updated Jan 1, 2019
+    Updated Mar 10, 2019
     See end of file for terms of use.
     --------------------------------------------
 }
