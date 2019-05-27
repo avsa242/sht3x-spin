@@ -1,3 +1,4 @@
+
 {
     --------------------------------------------
     Filename: SHT3x-Demo.spin
@@ -5,7 +6,7 @@
     Description: Interactive Demo for the Sensirion SHT3x driver
     Copyright (c) 2019
     Started Mar 10, 2018
-    Updated Mar 10, 2019
+    Updated May 27, 2019
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -14,6 +15,7 @@ CON
     _clkmode        = cfg#_clkmode  'Clock settings pulled from cfg object
     _xinfreq        = cfg#_xinfreq  ' (optionally change them manually)
 
+    LED             = cfg#LED1
     SCL_PIN         = 28            'Change these to match your I2C pin configuration
     SDA_PIN         = 29
     I2C_HZ          = 400_000       'SHT3x supports I2C FM up to 1MHz. Tested to 400kHz
@@ -374,14 +376,11 @@ PUB Setup
         ser.NewLine
     else
         ser.Str (string("SHT3x object failed to start - halting"))
-        sht3x.Stop
-        time.MSleep (500)
-        ser.Stop
-        flash(cfg#LED1)
+        Flash(LED, 500)
 
     _keyDaemon_cog := cognew(keyDaemon, @_keyDaemon_stack)
 
-    '' Establish some initial settings
+' Establish some initial settings
     _global_delay := 100
     _mps := 0.5
     _repeatability := sht3x#LOW
@@ -393,12 +392,18 @@ PUB Waiting
     ser.Str (string(ser#NL, "Press any key to continue (ESC to return to previous demo)..."))
     repeat until _demo_state <> WAIT_STATE
 
-PUB flash(led_pin)
+PUB Stop
+
+    sht3x.Stop
+    time.MSleep (5)
+    ser.Stop
+
+PUB Flash(led_pin, delay_ms)
 
     dira[led_pin] := 1
     repeat
         !outa[led_pin]
-        time.MSleep (500)
+        time.MSleep (delay_ms)
 
 DAT
 

@@ -5,7 +5,7 @@
     Description: Driver for Sensirion's SHT3X Temperature/RH Sensors
     Copyright (c) 2019
     Started Nov 19, 2017
-    Updated Mar 10, 2019
+    Updated May 27, 2019
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -25,13 +25,14 @@ CON
 
     MSB             = 1
     LSB             = 0
-    POLYNOMIAL      = $31
+    POLYNOMIAL      = crc#POLYNOMIAL8_SENSIRION
 
 OBJ
 
-    core  : "core.con.sht3x"
-    time  : "time"
-    i2c   : "jm_i2c_fast"
+    core    : "core.con.sht3x"
+    time    : "time"
+    i2c     : "com.i2c"
+    crc     : "math.crc"
 
 VAR
 
@@ -273,7 +274,7 @@ PUB SetAlertTrig_Hi(rh_set, temp_set) | rht, tt, crct, tmp, write_data
     rht := RHPct_Raw7 (rh_set)
     tt := TempDeg_Raw9 (temp_set)
     tmp := (rht | tt)
-    crct := crc8(@tmp, 2)
+    crct := crc.SensirionCRC8(@tmp, 2)
     write_data.byte[0] := tmp.byte[1]
     write_data.byte[1] := tmp.byte[0]
     write_data.byte[2] := crct
@@ -285,7 +286,7 @@ PUB SetAlertOk_Hi(rh_clr, temp_clr) | rht, tt, write_data, crct, tmp
     rht := RHPct_Raw7 (rh_clr)
     tt := TempDeg_Raw9 (temp_clr)
     tmp := (rht | tt)
-    crct := crc8(@tmp, 2)
+    crct := crc.SensirionCRC8(@tmp, 2)
     write_data.byte[0] := (tmp >> 8) & $FF
     write_data.byte[1] := tmp & $FF
     write_data.byte[2] := crct
@@ -297,7 +298,7 @@ PUB SetAlertOk_Lo(rh_clr, temp_clr) | rht, tt, write_data, crct, tmp
     rht := RHPct_Raw7 (rh_clr)
     tt := TempDeg_Raw9 (temp_clr)
     tmp := (rht | tt)
-    crct := crc8(@tmp, 2)
+    crct := crc.SensirionCRC8(@tmp, 2)
     write_data.byte[0] := (tmp >> 8) & $FF
     write_data.byte[1] := tmp & $FF
     write_data.byte[2] := crct
@@ -309,14 +310,14 @@ PUB SetAlertTrig_Lo(rh_set, temp_set) | rht, tt, write_data, crct, tmp
     rht := RHPct_Raw7 (rh_set)
     tt := TempDeg_Raw9 (temp_set)
     tmp := (rht | tt)
-    crct := crc8(@tmp, 2)
+    crct := crc.SensirionCRC8(@tmp, 2)
     write_data.byte[0] := (tmp >> 8) & $FF
     write_data.byte[1] := tmp & $FF
     write_data.byte[2] := crct
 
     writeRegX(core#ALERTLIM_WR_LO_SET, 3, write_data)
 
-PUB Heater(enabled) | tmp, crc
+PUB Heater(enabled) | tmp, readcrc
 ' Enable/Disable built-in heater
 '   Valid values: TRUE (-1 or 1), FALSE
 '   Any other value polls the chip and returns the current setting
@@ -327,8 +328,8 @@ PUB Heater(enabled) | tmp, crc
         0, 1:
             enabled := lookupz(||enabled: core#HEATERDIS, core#HEATEREN)
         OTHER:
-            crc := tmp.byte[2]
-            if crcgood(@tmp, crc)
+            readcrc := tmp.byte[2]
+            if crcgood(@tmp, readcrc)
                 return result := ((tmp >> core#FLD_HEATER) & %1) * TRUE
             else
                 return FALSE
@@ -431,7 +432,7 @@ PRI readRegX(reg, nr_bytes, addr_buff) | cmd_packet[2], ackbit
     cmd_packet.byte[2] := reg.byte[LSB]                 'Register LSB
 
     i2c.start
-    ackbit := i2c.pwrite (@cmd_packet, 3)
+    ackbit := i2c.wr_block (@cmd_packet, 3)
     if ackbit == i2c#NAK
         i2c.stop
         return
@@ -455,7 +456,7 @@ PRI readRegX(reg, nr_bytes, addr_buff) | cmd_packet[2], ackbit
         i2c.stop                                        'No data was available,
         return -1                                       ' so do nothing
 
-    i2c.pread (addr_buff, nr_bytes, TRUE)
+    i2c.rd_block (addr_buff, nr_bytes, TRUE)
     i2c.stop
 
 PRI writeRegX(reg, nr_bytes, val) | cmd_packet[2]
@@ -490,7 +491,7 @@ PRI writeRegX(reg, nr_bytes, val) | cmd_packet[2]
             return
 
     i2c.start
-    i2c.pwrite (@cmd_packet, 3 + nr_bytes)
+    i2c.wr_block (@cmd_packet, 3 + nr_bytes)
     i2c.stop
 
 PRI compare(b1, b2)
@@ -500,23 +501,7 @@ PRI compare(b1, b2)
 
 PRI crcgood(calc_crc, rcvd_crc)
 
-    return crc8(calc_crc, 2) == rcvd_crc
-
-PRI crc8(data, len) | currbyte, i, j, crc
-'Calculate CRC8 of data with length 'len' bytes at address 'data'
-'   Datasheet example of $BEEF should return $92
-    crc := $FF                                      'Initialize CRC with $FF
-    repeat j from 0 to len-1
-        currbyte := byte[data][(len-1)-j]
-        crc := crc ^ currbyte
-
-        repeat i from 1 to 8
-            if (crc & $80)
-                crc := (crc << 1) ^ POLYNOMIAL      '$31 (x^8 + x^5 + x^4 + 1)
-            else
-                crc := (crc << 1)
-    crc := crc ^ $00                                'Final XOR
-    result := crc & $FF                             '
+    return crc.SensirionCRC8 (calc_crc, 2) == rcvd_crc
 
 DAT
 {
