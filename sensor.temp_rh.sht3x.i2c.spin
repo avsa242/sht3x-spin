@@ -32,6 +32,7 @@ VAR
 
     word _lasttemp, _lastrh
     byte _repeatability
+    byte _addr_bit
 
 OBJ
 
@@ -44,15 +45,20 @@ PUB Null
 
 PUB Start: okay                                                 'Default to "standard" Propeller I2C pins and 400kHz
 
-    okay := Startx (DEF_SCL, DEF_SDA, DEF_HZ)
+    okay := Startx (DEF_SCL, DEF_SDA, DEF_HZ, 0)
 
-PUB Startx(SCL_PIN, SDA_PIN, I2C_HZ): okay
+PUB Startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT): okay
 
     if lookdown(SCL_PIN: 0..31) and lookdown(SDA_PIN: 0..31)
         if I2C_HZ =< core#I2C_MAX_FREQ
             if okay := i2c.setupx (SCL_PIN, SDA_PIN, I2C_HZ)    'I2C Object Started?
                 time.MSleep (1)
-                if i2c.present (SLAVE_WR)                       'Response from device?
+                case ADDR_BIT
+                    0:
+                        _addr_bit := 0
+                    OTHER:
+                        _addr_bit := 1 << 1
+                if i2c.present (SLAVE_WR | _addr_bit)           'Response from device?
                     if SerialNum
                         Reset
                         return okay
@@ -143,7 +149,7 @@ PRI readReg(reg, nr_bytes, buff_addr) | cmd_packet, tmp
             return
 
     i2c.start
-    i2c.write (SLAVE_RD)
+    i2c.write (SLAVE_RD | _addr_bit)
     repeat tmp from 0 to nr_bytes-1
         byte[buff_addr][(nr_bytes-1)-tmp] := i2c.read (tmp == nr_bytes-1)
     i2c.stop
@@ -151,7 +157,7 @@ PRI readReg(reg, nr_bytes, buff_addr) | cmd_packet, tmp
 
 PRI writeReg(reg, nr_bytes, buff_addr) | cmd_packet, tmp
 ' Write nr_bytes to the slave device from the address stored in buff_addr
-    cmd_packet.byte[0] := SLAVE_WR
+    cmd_packet.byte[0] := (SLAVE_WR | _addr_bit)
     cmd_packet.byte[1] := reg.byte[MSB]
     cmd_packet.byte[2] := reg.byte[LSB]
 

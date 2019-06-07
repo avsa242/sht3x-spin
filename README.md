@@ -10,6 +10,7 @@ This is a P8X32A/Propeller driver object for Sensirion's SHT3x (30, 31, 35) line
 * Supports all three measurement repeatability modes
 * Supports toggling the on-chip heating element
 * Supports reading the sensor's serial number
+* Supports alternate slave address
 
 ## Example Code
 * Semi-interactive serial terminal-based demo
@@ -17,5 +18,5 @@ This is a P8X32A/Propeller driver object for Sensirion's SHT3x (30, 31, 35) line
 
 ## TODO
 - [ ] Support alert thresholds
-- [ ] Support alternate slave address
+- [x] Support alternate slave address
 - [ ] Support runtime switchable CRC-checking of received data
