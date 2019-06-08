@@ -23,16 +23,23 @@ CON
     MSB             = 1
     LSB             = 0
 
+    NODATA_AVAIL    = $E000_0000
 ' Measurement repeatability
     RPT_LOW         = 0
     RPT_MED         = 1
     RPT_HIGH        = 2
+
+' Measurement modes
+    MMODE_POLL      = 0
+    MMODE_PERIODIC  = 1
 
 VAR
 
     word _lasttemp, _lastrh
     byte _repeatability
     byte _addr_bit
+    byte _measure_mode
+    byte _mps
 
 OBJ
 
@@ -69,6 +76,10 @@ PUB Stop
 
     i2c.terminate
 
+PUB Break
+' Stop Periodic Data Acquisition Mode
+    writeReg(core#BREAK_STOP, 0, 0)
+
 PUB ClearStatus
 ' Clears the status register
     writeReg(core#CLEARSTATUS, 0, 0)
@@ -98,15 +109,59 @@ PUB Measure | tmp[2]
 ' Perform measurement
 '   Returns: Temperature and Humidity as most-significant and least-significant words, respectively (unprocessed)
 '   Also sets variables readable with Temperature and Humidity methods
-    case _repeatability
-        RPT_LOW, RPT_MED, RPT_HIGH:
-            readReg(lookupz(_repeatability: core#MEAS_LOWREP, core#MEAS_MEDREP, core#MEAS_HIGHREP), 6, @tmp)
-        OTHER:
-            return
+    case _measure_mode
+        MMODE_POLL:
+            case _repeatability
+                RPT_LOW, RPT_MED, RPT_HIGH:
+                    readReg(lookupz(_repeatability: core#MEAS_LOWREP, core#MEAS_MEDREP, core#MEAS_HIGHREP), 6, @tmp)
+                OTHER:
+                    return
 
+        MMODE_PERIODIC:
+            if readReg(core#FETCHDATA, 6, @tmp) == NODATA_AVAIL
+                return
     _lasttemp := (tmp.byte[5] << 8) | tmp.byte[4]
     _lastrh := (tmp.byte[2] << 8) | tmp.byte[1]
     return (_lasttemp << 16) | (_lastrh)
+
+PUB MeasureMode(mode)
+
+    case mode
+        MMODE_POLL:
+            Break
+        MMODE_PERIODIC:
+
+        OTHER:
+            return _measure_mode
+
+    _measure_mode := mode
+
+PUB MeasureRate(mps) | tmp
+' Set measurement rate (for periodic measure mode), in measurements per second
+'   Valid values: 0/5/0.5, 1, 2, 4, 10
+'   Any other value returns the current setting
+'   NOTE: Sensirion notes that at the highest measurement rate (10mps), self-heating of the sensor might occur
+    case mps
+        0, 5, 0.5:
+            tmp := core#MEAS_PERIODIC_0_5 | lookupz(_repeatability: core#RPT_LO_0_5, core#RPT_MED_0_5, core#RPT_HI_0_5)
+            _mps := mps
+        1:
+            tmp := core#MEAS_PERIODIC_1 | lookupz(_repeatability: core#RPT_LO_1, core#RPT_MED_1, core#RPT_HI_1)
+            _mps := mps
+        2:
+            tmp := core#MEAS_PERIODIC_2 | lookupz(_repeatability: core#RPT_LO_2, core#RPT_MED_2, core#RPT_HI_2)
+            _mps := mps
+        4:
+            tmp := core#MEAS_PERIODIC_4 | lookupz(_repeatability: core#RPT_LO_4, core#RPT_MED_4, core#RPT_HI_4)
+            _mps := mps
+        10:
+            tmp := core#MEAS_PERIODIC_10 | lookupz(_repeatability: core#RPT_LO_10, core#RPT_MED_10, core#RPT_HI_10)
+            _mps := mps
+        OTHER:
+            return _mps
+    Break                                             'Stop any measurements that might be ongoing
+    writeReg(tmp, 0, 0)
+    MeasureMode (MMODE_PERIODIC)
 
 PUB Repeatability(level) | tmp
 ' Set measurement repeatability/stability
@@ -137,7 +192,7 @@ PUB Reset
     writeReg(core#SOFTRESET, 0, 0)
     time.MSleep (1)
 
-PRI readReg(reg, nr_bytes, buff_addr) | cmd_packet, tmp
+PRI readReg(reg, nr_bytes, buff_addr) | cmd_packet, tmp, ackbit
 ' Read nr_bytes from the slave device into the address stored in buff_addr
     writeReg(reg, 0, 0)
     case reg                                                    'Basic register validation
@@ -145,11 +200,15 @@ PRI readReg(reg, nr_bytes, buff_addr) | cmd_packet, tmp
             time.USleep (500)
         core#MEAS_HIGHREP..core#MEAS_LOWREP:
         core#STATUS:
+        core#FETCHDATA:
         OTHER:
             return
 
     i2c.start
-    i2c.write (SLAVE_RD | _addr_bit)
+    ackbit := i2c.write (SLAVE_RD | _addr_bit)
+    if ackbit
+        i2c.stop
+        return NODATA_AVAIL                                     'NAK from sensor - no data available
     repeat tmp from 0 to nr_bytes-1
         byte[buff_addr][(nr_bytes-1)-tmp] := i2c.read (tmp == nr_bytes-1)
     i2c.stop

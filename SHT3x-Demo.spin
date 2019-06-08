@@ -36,7 +36,7 @@ CON
 
 OBJ
 
-    cfg     : "core.con.boardcfg.parraldev"
+    cfg     : "core.con.boardcfg.flip"
     ser     : "com.serial.terminal"
     time    : "time"
     sht3x   : "sensor.temp_rh.sht3x.i2c"
@@ -51,6 +51,7 @@ PUB Main | rh, t
 
     Setup
     sht3x.Repeatability (REPEATABILITY)
+    sht3x.MeasureRate (0.5)
 
     repeat
         sht3x.Measure

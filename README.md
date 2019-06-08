@@ -11,10 +11,10 @@ This is a P8X32A/Propeller driver object for Sensirion's SHT3x (30, 31, 35) line
 * Supports toggling the on-chip heating element
 * Supports reading the sensor's serial number
 * Supports alternate slave address
+* Supports periodic measurement mode
 
 ## Example Code
-* Semi-interactive serial terminal-based demo
-* Digital thermometer/hygrometer on a 4DSystems uOLED-128-G2 display
+* Simple serial terminal-based readout demo
 
 ## TODO
 - [ ] Support alert thresholds
