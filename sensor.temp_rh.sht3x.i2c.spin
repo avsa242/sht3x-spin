@@ -130,7 +130,7 @@ PUB MeasureMode(mode)
         MMODE_POLL:
             Break
         MMODE_PERIODIC:
-
+            MeasureRate (_mps)
         OTHER:
             return _measure_mode
 
@@ -161,7 +161,7 @@ PUB MeasureRate(mps) | tmp
             return _mps
     Break                                             'Stop any measurements that might be ongoing
     writeReg(tmp, 0, 0)
-    MeasureMode (MMODE_PERIODIC)
+    _measure_mode := MMODE_PERIODIC
 
 PUB Repeatability(level) | tmp
 ' Set measurement repeatability/stability
