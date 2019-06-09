@@ -5,7 +5,7 @@
     Description: Demo of the SHT3x driver
     Copyright (c) 2019
     Started Mar 10, 2018
-    Updated Jun 7, 2019
+    Updated Jun 9, 2019
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -27,7 +27,7 @@ CON
 
     F               = 0
     C               = 1
-    TEMP_SCALE      = F             ' Change this to one of F, or C
+    TEMP_SCALE      = C             ' Change this to one of F, or C
 
     LOW             = sht3x#RPT_LOW
     MED             = sht3x#RPT_MED
@@ -51,12 +51,43 @@ PUB Main | rh, t
 
     Setup
     sht3x.Repeatability (REPEATABILITY)
-    sht3x.MeasureRate (0.5)
+    sht3x.MeasureRate (4)
+
+    sht3x.AlertTrigHiRH (80)
+    sht3x.AlertClearHiRH (79)
+    sht3x.AlertTrigLoRH (22)
+    sht3x.AlertClearLoRH (20)
+
+    sht3x.AlertTrigHiTemp (60)
+    sht3x.AlertClearHiTemp (58)
+    sht3x.AlertTrigLoTemp (-9)
+    sht3x.AlertClearLoTemp (-10)
+
+    ser.Position (0, 3)
+    ser.Str (string("Humidity alert threshold levels: "))
+    ser.Dec (sht3x.AlertTrigHiRH (-2))
+    ser.Char (" ")
+    ser.Dec (sht3x.AlertClearHiRH (-2))
+    ser.Char (" ")
+    ser.Dec (sht3x.AlertTrigLoRH (-2))
+    ser.Char (" ")
+    ser.Dec (sht3x.AlertClearLoRH (-2))
+    ser.NewLine
+
+    ser.Str (string("Temperature alert threshold levels: "))
+    ser.Dec (sht3x.AlertTrigHiTemp (-255))
+    ser.Char (" ")
+    ser.Dec (sht3x.AlertClearHiTemp (-255))
+    ser.Char (" ")
+    ser.Dec (sht3x.AlertTrigLoTemp (-255))
+    ser.Char (" ")
+    ser.Dec (sht3x.AlertClearLoTemp (-255))
+    ser.NewLine
 
     repeat
         sht3x.Measure
 
-        ser.Position (0, 3)
+        ser.Position (0, 7)
         ser.Str (string("Temperature: "))
         case TEMP_SCALE
             F:
@@ -89,8 +120,7 @@ PUB Setup
     if _sht3x_cog := sht3x.Startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT)
         ser.Str (string("SHT3x driver (S/N "))
         ser.Hex (sht3x.SerialNum, 8)
-        ser.Str (string(") started"))
-        ser.NewLine
+        ser.Str (string(") started", ser#NL))
     else
         ser.Str (string("SHT3x driver failed to start - halting"))
         Stop

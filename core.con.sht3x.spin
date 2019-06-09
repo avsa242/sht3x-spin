@@ -5,7 +5,7 @@
     Description: Low-level constants
     Copyright (c) 2019
     Started Nov 19, 2017
-    Updated Jun 7, 2019
+    Updated Jun 9, 2019
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -15,6 +15,8 @@ CON
     SLAVE_ADDR              = $44 << 1                  ' Default slave address
     I2C_DEF_FREQ            = 400_000                   ' Set a reasonable default bus frequency
     I2C_MAX_FREQ            = 1_000_000                 ' SHT3X supports I2C FM up to 1MHz
+
+    ADC_MAX                 = 65535
 
 ' Periodic measurement commands
     MEAS_PERIODIC_0_5       = $2000 ' MSB |
@@ -71,6 +73,14 @@ CON
     ALERTLIM_RD_LO_CLR      = $E109
     ALERTLIM_RD_HI_CLR      = $E114
     ALERTLIM_RD_HI_SET      = $E11F
+
+    ALERTLIM_MASK           = $FFFF
+        FLD_ALERTLIM_TEMP   = 0
+        BITS_ALERTLIM_TEMP  = %111111111
+        MASK_ALERTLIM_TEMP  = ALERTLIM_MASK ^ (BITS_ALERTLIM_TEMP << FLD_ALERTLIM_TEMP)
+        FLD_ALERTLIM_RH     = 9
+        BITS_ALERTLIM_RH    = %1111111
+        MASK_ALERTLIM_RH    = ALERTLIM_MASK ^ (BITS_ALERTLIM_RH << FLD_ALERTLIM_RH)
 
     STATUS                  = $F32D
     STATUS_MASK             = $AC13

@@ -5,7 +5,7 @@
     Description: Driver for Sensirion SHT3x series Temperature/Relative Humidity sensors
     Copyright (c) 2019
     Started Nov 19, 2017
-    Updated Jun 7, 2019
+    Updated Jun 9, 2019
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -46,6 +46,7 @@ OBJ
     i2c : "com.i2c"
     core: "core.con.sht3x"
     time: "time"
+    crc : "math.crc"
 
 PUB Null
 ' This is not a top-level object
@@ -76,6 +77,146 @@ PUB Stop
 
     i2c.terminate
 
+PUB AlertTrigHiRH(level) | tmp, chk
+' Set RH high alert threshold trigger level, in percent
+'   Valid values: 0..100
+'   Any other value polls the chip and returns the current setting, in hundredths of a percent
+    tmp := 0
+    readReg(core#ALERTLIM_RD_HI_SET, 3, @tmp)
+    case level
+        0..100:
+            level := RHAlertRaw7 (level)
+        OTHER:
+            tmp >>= 8                                           ' Chop off CRC
+            return RHAlertPct (tmp)
+    tmp >>= 8
+    tmp &= core#MASK_ALERTLIM_RH
+    tmp := (tmp | level)
+    writeReg(core#ALERTLIM_WR_HI_SET, 2, @tmp)
+
+PUB AlertClearHiRH(level) | tmp
+' Set RH high alert threshold clear level, in percent
+'   Valid values: 0..100
+'   Any other value polls the chip and returns the current setting, in hundredths of a percent
+    tmp := 0
+    readReg(core#ALERTLIM_RD_HI_CLR, 3, @tmp)
+    case level
+        0..100:
+            level := RHAlertRaw7 (level)
+        OTHER:
+            tmp >>= 8                                           ' Chop off CRC
+            return RHAlertPct (tmp)
+    tmp >>= 8
+    tmp &= core#MASK_ALERTLIM_RH
+    tmp := (tmp | level)
+    writeReg(core#ALERTLIM_WR_HI_CLR, 2, @tmp)
+
+PUB AlertTrigLoRH(level) | tmp
+' Set RH low alert threshold trigger level, in percent
+'   Valid values: 0..100
+'   Any other value polls the chip and returns the current setting, in hundredths of a percent
+    tmp := 0
+    readReg(core#ALERTLIM_RD_LO_SET, 3, @tmp)
+    case level
+        0..100:
+            level := RHAlertRaw7 (level)
+        OTHER:
+            tmp >>= 8                                           ' Chop off CRC
+            return RHAlertPct (tmp)
+    tmp >>= 8
+    tmp &= core#MASK_ALERTLIM_RH
+    tmp := (tmp | level)
+    writeReg(core#ALERTLIM_WR_LO_SET, 2, @tmp)
+
+PUB AlertClearLoRH(level) | tmp
+' Set RH low alert threshold clear level, in percent
+'   Valid values: 0..100
+'   Any other value polls the chip and returns the current setting, in hundredths of a percent
+    tmp := 0
+    readReg(core#ALERTLIM_RD_LO_CLR, 3, @tmp)
+    case level
+        0..100:
+            level := RHAlertRaw7 (level)
+        OTHER:
+            tmp >>= 8                                           ' Chop off CRC
+            return RHAlertPct (tmp)
+    tmp >>= 8
+    tmp &= core#MASK_ALERTLIM_RH
+    tmp := (tmp | level)
+    writeReg(core#ALERTLIM_WR_LO_CLR, 2, @tmp)
+
+PUB AlertTrigHiTemp(level) | tmp
+' Set Temperature high alert threshold trigger level, in degrees C
+'   Valid values: -45..130
+'   Any other value polls the chip and returns the current setting, in hundredths of a degree C
+    tmp := 0
+    readReg(core#ALERTLIM_RD_HI_SET, 3, @tmp)
+    case level
+        -45..130:
+            level := TempAlertRaw9 (level)
+        OTHER:
+            tmp >>= 8                                           ' Chop off CRC
+            tmp &= $1FF
+            return TempAlertDeg (tmp)
+    tmp >>= 8
+    tmp &= core#MASK_ALERTLIM_TEMP
+    tmp := (tmp | level)
+    writeReg(core#ALERTLIM_WR_HI_SET, 2, @tmp)
+
+PUB AlertClearHiTemp(level) | tmp
+' Set Temperature high alert threshold clear level, in degrees C
+'   Valid values: -45..130
+'   Any other value polls the chip and returns the current setting, in hundredths of a degree C
+    tmp := 0
+    readReg(core#ALERTLIM_RD_HI_CLR, 3, @tmp)
+    case level
+        -45..130:
+            level := TempAlertRaw9 (level)
+        OTHER:
+            tmp >>= 8                                           ' Chop off CRC
+            tmp &= $1FF
+            return TempAlertDeg (tmp)
+    tmp >>= 8
+    tmp &= core#MASK_ALERTLIM_TEMP
+    tmp := (tmp | level)
+    writeReg(core#ALERTLIM_WR_HI_CLR, 2, @tmp)
+
+PUB AlertTrigLoTemp(level) | tmp
+' Set Temperature low alert threshold trigger level, in degrees C
+'   Valid values: -45..130
+'   Any other value polls the chip and returns the current setting, in hundredths of a degree C
+    tmp := 0
+    readReg(core#ALERTLIM_RD_LO_SET, 3, @tmp)
+    case level
+        -45..130:
+            level := TempAlertRaw9 (level)
+        OTHER:
+            tmp >>= 8                                           ' Chop off CRC
+            tmp &= $1FF
+            return TempAlertDeg (tmp)
+    tmp >>= 8
+    tmp &= core#MASK_ALERTLIM_TEMP
+    tmp := (tmp | level)
+    writeReg(core#ALERTLIM_WR_LO_SET, 2, @tmp)
+
+PUB AlertClearLoTemp(level) | tmp
+' Set Temperature low alert threshold clear level, in degrees C
+'   Valid values: -45..130
+'   Any other value polls the chip and returns the current setting, in hundredths of a degree C
+    tmp := 0
+    readReg(core#ALERTLIM_RD_LO_CLR, 3, @tmp)
+    case level
+        -45..130:
+            level := TempAlertRaw9 (level)
+        OTHER:
+            tmp >>= 8                                           ' Chop off CRC
+            tmp &= $1FF
+            return TempAlertDeg (tmp)
+    tmp >>= 8
+    tmp &= core#MASK_ALERTLIM_TEMP
+    tmp := (tmp | level)
+    writeReg(core#ALERTLIM_WR_LO_CLR, 2, @tmp)
+
 PUB Break
 ' Stop Periodic Data Acquisition Mode
     writeReg(core#BREAK_STOP, 0, 0)
@@ -103,7 +244,7 @@ PUB Heater(enabled) | tmp
 PUB Humidity
 ' Return Relative Humidity from last measurement, in hundredths of a percent
 '   (e.g., 4762 is equivalent to 47.62%)
-    return (100 * (_lastrh * 100)) / 65535
+    return (100 * (_lastrh * 100)) / core#ADC_MAX
 
 PUB Measure | tmp[2]
 ' Perform measurement
@@ -159,7 +300,7 @@ PUB MeasureRate(mps) | tmp
             _mps := mps
         OTHER:
             return _mps
-    Break                                             'Stop any measurements that might be ongoing
+    Break                                                       ' Stop any measurements that might be ongoing
     writeReg(tmp, 0, 0)
     _measure_mode := MMODE_PERIODIC
 
@@ -173,15 +314,59 @@ PUB Repeatability(level) | tmp
         OTHER:
             return _repeatability
 
+PUB RHAlertRaw7(rh_pct)
+' Converts Percent RH to 7-bit value, for use with alert threshold setting
+'   Valid values: 0..100
+'   Any other value is ignored
+'   NOTE: Value is left-justified in MSB of word
+    case rh_pct
+        0..100:
+            return (((rh_pct * 100) / 100 * core#ADC_MAX) / 100) & $FE00
+        OTHER:
+            return
+
+PUB RHAlertPct(rh_7b)
+' Converts 7-bit value to Percent RH, for use with alert threshold settings
+'   Valid values: $02xx..$FExx (xx = 00)
+'   NOTE: Value must be left-justified in MSB of word
+    rh_7b &= $FE00                                              ' Mask off temperature
+    rh_7b *= 10000                                              ' Scale up
+    rh_7b /= core#ADC_MAX                                       ' Scale to %
+    result := rh_7b
+
+PUB TempAlertRaw9(temp_c) | scale
+' Converts degrees C to 9-bit value, for use with alert threshold settings
+'   Valid values: -45..130
+    case temp_c
+        -45..130:
+            scale := 10_000                                     ' Fixed-point scale
+            result := ((((temp_c * scale) + (45 * scale)) / 175 * core#ADC_MAX)) / scale
+            return (result >> 7) & $001FF
+        OTHER:
+            return
+
+PUB TempAlertDeg(temp_9b) | scale
+' Converts raw 9-bit value to temperature in
+'   Returns: hundredths of a degree C (0..511 -> -4500..12966 or -45.00C 129.66C)
+'   Valid values: 0..511
+'   Any other value is ignored
+    scale := 100
+    case temp_9b
+        0..511:
+            result := (temp_9b << 7)
+            return ((175 * (result * scale)) / core#ADC_MAX)-(45 * scale)
+        OTHER:
+            return
+
 PUB TemperatureC
 ' Return Temperature from last measurement, in hundredths of a degree Celsius
 '   (e.g., 2105 is equivalent to 21.05 deg C)
-    return ((175 * (_lasttemp * 100)) / 65535)-(45 * 100)
+    return ((175 * (_lasttemp * 100)) / core#ADC_MAX)-(45 * 100)
 
 PUB TemperatureF
 ' Return Temperature from last measurement, in hundredths of a degree Fahrenheit
 '   (e.g., 6989 is equivalent to 69.89 deg F)
-    return ((315 * (_lasttemp * 100)) / 65535)-(49 * 100)
+    return ((315 * (_lasttemp * 100)) / core#ADC_MAX)-(49 * 100)
 
 PUB SerialNum
 ' Return device Serial Number
@@ -192,6 +377,25 @@ PUB Reset
     writeReg(core#SOFTRESET, 0, 0)
     time.MSleep (1)
 
+PUB LastCRC
+
+    result := 0
+    readReg( core#STATUS, 3, @result)
+    result := (result & %1) * TRUE
+
+PUB LastCMD
+
+    result := 0
+    readReg( core#STATUS, 3, @result)
+    result := ((result >> 1) & %1) * TRUE
+
+PRI swap (word_addr)
+' Swap byte order of a WORD
+    byte[word_addr][2] := byte[word_addr][0]
+    byte[word_addr][0] := byte[word_addr][1]
+    byte[word_addr][1] := byte[word_addr][2]
+    byte[word_addr][2] := 0
+
 PRI readReg(reg, nr_bytes, buff_addr) | cmd_packet, tmp, ackbit
 ' Read nr_bytes from the slave device into the address stored in buff_addr
     writeReg(reg, 0, 0)
@@ -201,6 +405,7 @@ PRI readReg(reg, nr_bytes, buff_addr) | cmd_packet, tmp, ackbit
         core#MEAS_HIGHREP..core#MEAS_LOWREP:
         core#STATUS:
         core#FETCHDATA:
+        core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET, core#ALERTLIM_RD_LO_SET..core#ALERTLIM_RD_HI_SET:
         OTHER:
             return
 
@@ -214,7 +419,7 @@ PRI readReg(reg, nr_bytes, buff_addr) | cmd_packet, tmp, ackbit
     i2c.stop
     return
 
-PRI writeReg(reg, nr_bytes, buff_addr) | cmd_packet, tmp
+PRI writeReg(reg, nr_bytes, buff_addr) | cmd_packet, tmp, chk
 ' Write nr_bytes to the slave device from the address stored in buff_addr
     cmd_packet.byte[0] := (SLAVE_WR | _addr_bit)
     cmd_packet.byte[1] := reg.byte[MSB]
@@ -223,8 +428,15 @@ PRI writeReg(reg, nr_bytes, buff_addr) | cmd_packet, tmp
     i2c.start
     repeat tmp from 0 to 2
         i2c.write (cmd_packet.byte[tmp])
-    i2c.stop
 
+    if nr_bytes > 0
+        chk := crc.SensirionCRC8 (buff_addr, 2)
+        swap(buff_addr)
+        byte[buff_addr][2] := chk
+        repeat tmp from 0 to nr_bytes
+            i2c.write (byte[buff_addr][tmp])
+    i2c.stop
+    result := long[buff_addr]
     case reg                                                    'Basic register validation
         core#CLEARSTATUS:
         core#HEATEREN, core#HEATERDIS:
@@ -232,10 +444,9 @@ PRI writeReg(reg, nr_bytes, buff_addr) | cmd_packet, tmp
             time.MSleep (20)
         core#SOFTRESET:
             time.MSleep (10)
+        core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET, core#ALERTLIM_RD_LO_SET..core#ALERTLIM_RD_HI_SET:
         OTHER:
             return
-
-    return
 
 DAT
 {

@@ -12,11 +12,12 @@ This is a P8X32A/Propeller driver object for Sensirion's SHT3x (30, 31, 35) line
 * Supports reading the sensor's serial number
 * Supports alternate slave address
 * Supports periodic measurement mode
+* Supports settings alert thresholds
 
 ## Example Code
 * Simple serial terminal-based readout demo
 
 ## TODO
-- [ ] Support alert thresholds
+- [x] Support alert thresholds
 - [x] Support alternate slave address
 - [ ] Support runtime switchable CRC-checking of received data
