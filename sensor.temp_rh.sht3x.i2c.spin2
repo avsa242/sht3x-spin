@@ -33,9 +33,14 @@ CON
     MMODE_POLL      = 0
     MMODE_PERIODIC  = 1
 
+' Temperature scales
+    C               = 0
+    F               = 1
+
 VAR
 
     word _lasttemp, _lastrh
+    byte _temp_scale
     byte _repeatability
     byte _addr_bit
     byte _measure_mode
@@ -375,15 +380,28 @@ PUB TempAlertDeg(temp_9b): result | scale
         OTHER:
             return
 
-PUB TemperatureC(): result
-' Return Temperature from last measurement, in hundredths of a degree Celsius
+PUB Temperature(): result
+' Return Temperature from last measurement, in hundredths of a degree
 '   (e.g., 2105 is equivalent to 21.05 deg C)
-    result := ((175 * (_lasttemp * 100)) / core.ADC_MAX)-(45 * 100)
+    case _temp_scale
+        C:
+            return ((175 * (_lasttemp * 100)) / core.ADC_MAX)-(45 * 100)
+        F:
+            return ((315 * (_lasttemp * 100)) / core.ADC_MAX)-(49 * 100)
+        OTHER:
+            return FALSE
 
-PUB TemperatureF(): result
-' Return Temperature from last measurement, in hundredths of a degree Fahrenheit
-'   (e.g., 6989 is equivalent to 69.89 deg F)
-    result := ((315 * (_lasttemp * 100)) / core.ADC_MAX)-(49 * 100)
+PUB TempScale(scale=-2): curr_scale
+' Set temperature scale used by Temperature method
+'   Valid values:
+'       C (0): Celsius
+'       F (1): Fahrenheit
+'   Any other value returns the current setting
+    case scale
+        C, F:
+            _temp_scale := scale
+        OTHER:
+            return _temp_scale
 
 PUB SerialNum(): result
 ' Return device Serial Number
@@ -397,13 +415,13 @@ PUB Reset()
 PUB LastCRC(): result
 
     result := 0
-    readReg( core.STATUS, 3, @result)
+    readReg(core.STATUS, 3, @result)
     result := (result & %1) * TRUE
 
 PUB LastCMD(): result
 
     result := 0
-    readReg( core.STATUS, 3, @result)
+    readReg(core.STATUS, 3, @result)
     result := ((result >> 1) & %1) * TRUE
 
 PRI swap (word_addr)
