@@ -45,7 +45,7 @@ VAR
     byte _repeatability
     byte _addr_bit
     byte _measure_mode
-    byte _mps
+    byte _drate_hz
 
 OBJ
 
@@ -241,6 +241,34 @@ PUB ClearStatus()
 ' Clears the status register
     writeReg(core.CLEARSTATUS, 0, 0)
 
+PUB DataRate(Hz): curr_rate | tmp
+' Output data rate, in Hz
+'   Valid values: 0_5 (0.5Hz), 1, 2, 4, 10
+'   Any other value returns the current setting
+'   NOTE: Applies to continuous (CONT) OpMode, only
+'   NOTE: Sensirion notes that at the highest measurement rate (10Hz), self-heating of the sensor might occur
+    case Hz
+        0, 5, 0.5:
+            tmp := core.MEAS_PERIODIC_0_5 | lookupz(_repeatability: core.RPT_LO_0_5, core.RPT_MED_0_5, core.RPT_HI_0_5)         ' Measurement rate and repeatability are configured in the same register
+            _drate_hz := Hz
+        1:
+            tmp := core.MEAS_PERIODIC_1 | lookupz(_repeatability: core.RPT_LO_1, core.RPT_MED_1, core.RPT_HI_1)
+            _drate_hz := Hz
+        2:
+            tmp := core.MEAS_PERIODIC_2 | lookupz(_repeatability: core.RPT_LO_2, core.RPT_MED_2, core.RPT_HI_2)
+            _drate_hz := Hz
+        4:
+            tmp := core.MEAS_PERIODIC_4 | lookupz(_repeatability: core.RPT_LO_4, core.RPT_MED_4, core.RPT_HI_4)
+            _drate_hz := Hz
+        10:
+            tmp := core.MEAS_PERIODIC_10 | lookupz(_repeatability: core.RPT_LO_10, core.RPT_MED_10, core.RPT_HI_10)
+            _drate_hz := Hz
+        OTHER:
+            return _drate_hz
+    Break()                                                     ' Stop any measurements that might be ongoing
+    writeReg(tmp, 0, 0)
+    _measure_mode := CONT
+
 PUB Heater(enabled): result | tmp
 ' Enable/Disable built-in heater
 '   Valid values: TRUE (-1 or 1), FALSE (0)
@@ -286,40 +314,13 @@ PUB LastTemperature(): temp
 '   (e.g., 2105 is equivalent to 21.05 deg C)
     return calcTemp(_lasttemp)
 
-PUB MeasureRate(mps) | tmp
-' Set measurement rate (for periodic measure mode), in measurements per second
-'   Valid values: 0/5/0.5, 1, 2, 4, 10
-'   Any other value returns the current setting
-'   NOTE: Sensirion notes that at the highest measurement rate (10mps), self-heating of the sensor might occur
-    case mps
-        0, 5, 0.5:
-            tmp := core.MEAS_PERIODIC_0_5 | lookupz(_repeatability: core.RPT_LO_0_5, core.RPT_MED_0_5, core.RPT_HI_0_5)
-            _mps := mps
-        1:
-            tmp := core.MEAS_PERIODIC_1 | lookupz(_repeatability: core.RPT_LO_1, core.RPT_MED_1, core.RPT_HI_1)
-            _mps := mps
-        2:
-            tmp := core.MEAS_PERIODIC_2 | lookupz(_repeatability: core.RPT_LO_2, core.RPT_MED_2, core.RPT_HI_2)
-            _mps := mps
-        4:
-            tmp := core.MEAS_PERIODIC_4 | lookupz(_repeatability: core.RPT_LO_4, core.RPT_MED_4, core.RPT_HI_4)
-            _mps := mps
-        10:
-            tmp := core.MEAS_PERIODIC_10 | lookupz(_repeatability: core.RPT_LO_10, core.RPT_MED_10, core.RPT_HI_10)
-            _mps := mps
-        OTHER:
-            return _mps
-    Break                                                       ' Stop any measurements that might be ongoing
-    writeReg(tmp, 0, 0)
-    _measure_mode := CONT
-
 PUB OpMode(mode): curr_mode
 ' Set device operating mode
     case mode
         SINGLE:
             Break()
         CONT:
-            MeasureRate (_mps)
+            DataRate (_drate_hz)
         OTHER:
             return _measure_mode
 
