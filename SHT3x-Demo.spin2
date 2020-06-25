@@ -58,17 +58,21 @@ PUB Main() | temp, rh
     sht3x.TempScale(C)                                      ' Temperature scale
 
     repeat
-        sht3x.Measure()
         ser.position(0, 3)
-        temp := sht3x.Temperature()
-        ser.printf("Temperature: ")
-        DecimalDot(temp, 100)
-        ser.newline
 
-        rh := sht3x.Humidity()
-        ser.printf("Relative humidity: ")
-        DecimalDot(rh, 100)
-        waitms (100)
+        ser.printf("Previous temperature: ")
+        DecimalDot(sht3x.LastTemperature(), 100)
+
+        ser.printf("\nCurrent Temperature: ")
+        DecimalDot(sht3x.Temperature(), 100)
+
+        ser.printf("\n\nPrevious humidity: ")
+        DecimalDot(sht3x.LastHumidity(), 100)
+
+        ser.printf("\nRelative humidity: ")
+        DecimalDot(sht3x.Humidity(), 100)
+
+        waitms (1000)
 
 PRI DecimalDot(scaled, divisor) | whole[4], part[4], places, tmp
 ' Display a fixed-point scaled up number in decimal-dot notation - scale it back down by divisor

@@ -259,30 +259,32 @@ PUB Heater(enabled): result | tmp
 
     writeReg(enabled, 0, 0)
 
-PUB Humidity(): result
-' Return Relative Humidity from last measurement, in hundredths of a percent
+PUB Humidity(): rh | tmp[2]
+' Current Relative Humidity, in hundredths of a percent
+'   Returns: Integer
 '   (e.g., 4762 is equivalent to 47.62%)
-    result := (100 * (_lastrh * 100)) / core.ADC_MAX
-    return
-
-PUB Measure(): result | tmp[2]
-' Perform measurement
-'   Returns: Temperature and Humidity as most-significant and least-significant words, respectively (unprocessed)
-'   Also sets variables readable with Temperature and Humidity methods
     case _measure_mode
         SINGLE:
-            case _repeatability
-                LOW, MED, HIGH:
-                    readReg(lookupz(_repeatability: core.MEAS_LOWREP, core.MEAS_MEDREP, core.MEAS_HIGHREP), 6, @tmp)
-                OTHER:
-                    return
+            oneShotMeasure(@tmp)
 
         CONT:
-            if readReg(core.FETCHDATA, 6, @tmp) == NODATA_AVAIL
-                return
-    _lasttemp := (tmp.byte[5] << 8) | tmp.byte[4]
+            pollMeasure(@tmp)
+
     _lastrh := (tmp.byte[2] << 8) | tmp.byte[1]
-    return (_lasttemp << 16) | (_lastrh)
+
+    return calcRH(_lastrh)
+
+PUB LastHumidity(): rh
+' Previous Relative Humidity measurement, in hundredths of a percent
+'   Returns: Integer
+'   (e.g., 4762 is equivalent to 47.62%)
+    return calcRH(_lastrh)
+
+PUB LastTemperature(): temp
+' Previous Temperature measurement, in hundredths of a degree
+'   Returns: Integer
+'   (e.g., 2105 is equivalent to 21.05 deg C)
+    return calcTemp(_lasttemp)
 
 PUB MeasureRate(mps) | tmp
 ' Set measurement rate (for periodic measure mode), in measurements per second
@@ -381,16 +383,20 @@ PUB TempAlertDeg(temp_9b): result | scale
         OTHER:
             return
 
-PUB Temperature(): result
-' Return Temperature from last measurement, in hundredths of a degree
+PUB Temperature(): temp | tmp[2]
+' Current Temperature, in hundredths of a degree
+'   Returns: Integer
 '   (e.g., 2105 is equivalent to 21.05 deg C)
-    case _temp_scale
-        C:
-            return ((175 * (_lasttemp * 100)) / core.ADC_MAX)-(45 * 100)
-        F:
-            return ((315 * (_lasttemp * 100)) / core.ADC_MAX)-(49 * 100)
-        OTHER:
-            return FALSE
+    case _measure_mode
+        SINGLE:
+            oneShotMeasure(@tmp)
+
+        CONT:
+            pollMeasure(@tmp)
+
+    _lasttemp := (tmp.byte[5] << 8) | tmp.byte[4]
+
+    return calcTemp(_lasttemp)
 
 PUB TempScale(scale=-2): curr_scale
 ' Set temperature scale used by Temperature method
@@ -425,6 +431,33 @@ PUB LastCMD(): result
     readReg(core.STATUS, 3, @result)
     result := ((result >> 1) & %1) * TRUE
 
+PRI calcRH(rh_word): rh_cal
+
+    return (100 * (rh_word * 100)) / core.ADC_MAX
+
+PRI calcTemp(temp_word): temp_cal
+
+    case _temp_scale
+        C:
+            return ((175 * (temp_word * 100)) / core.ADC_MAX)-(45 * 100)
+        F:
+            return ((315 * (temp_word * 100)) / core.ADC_MAX)-(49 * 100)
+        OTHER:
+            return FALSE
+
+PRI oneShotMeasure(buff_addr)
+
+    case _repeatability
+        LOW, MED, HIGH:
+            readReg(lookupz(_repeatability: core.MEAS_LOWREP, core.MEAS_MEDREP, core.MEAS_HIGHREP), 6, buff_addr)
+        OTHER:
+            return FALSE
+
+PRI pollMeasure(buff_addr)
+
+    if readReg(core.FETCHDATA, 6, buff_addr) == NODATA_AVAIL
+        return FALSE
+
 PRI swap (word_addr)
 ' Swap byte order of a WORD
     byte[word_addr][2] := byte[word_addr][0]
@@ -447,11 +480,11 @@ PRI readReg(reg_nr, nr_bytes, buff_addr) | cmd_packet, tmp, ackbit
 
     i2c.start()
     ackbit := i2c.write (SLAVE_RD | _addr_bit)
-    if ackbit
+    if ackbit == i2c#NAK
         i2c.stop()
         return NODATA_AVAIL                                     'NAK from sensor - no data available
-    repeat tmp from 0 to nr_bytes-1
-        byte[buff_addr][(nr_bytes-1)-tmp] := i2c.read (tmp == nr_bytes-1)
+    repeat tmp from nr_bytes-1 to 0
+        byte[buff_addr][tmp] := i2c.read (tmp == 0)
     i2c.stop()
     return
 
