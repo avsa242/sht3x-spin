@@ -5,7 +5,7 @@
     Description: Demo of the SHT3x driver (P2 version)
     Copyright (c) 2020
     Started Nov 3, 2019
-    Updated Jun 14, 2020
+    Updated Jun 24, 2020
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -25,9 +25,9 @@ CON
     F               = 1
 
 ' Measurement repeatbility (on-sensor averaging)
-    LOW             = sht3x.RPT_LOW                         ' Least averaging / no filtering
-    MED             = sht3x.RPT_MED
-    HIGH            = sht3x.RPT_HIGH                        ' Most averaging, more stable readings
+    LOW             = sht3x.LOW                             ' Least averaging / no filtering
+    MED             = sht3x.MED
+    HIGH            = sht3x.HIGH                            ' Most averaging, more stable readings
 
 ' -- User-modifiable constants
     LED             = cfg.LED1
@@ -35,10 +35,11 @@ CON
     SER_TX          = cfg.SER_TX
     SER_BAUD        = 2_000_000
 
-    SCL_PIN         = 32            ' Change these to match your I2C pin configuration
+' I2C
+    SCL_PIN         = 32
     SDA_PIN         = 34
-    ADDR_BIT        = 0             ' Can be 0, or 1 for a second device on the bus
-    I2C_HZ          = 1_000_000     ' SHT3x supports I2C bus speeds up to FM+ (1MHz)
+    ADDR_BIT        = 0                                     ' Can be 0, or 1 for a second device on the bus
+    I2C_HZ          = 1_000_000                             ' Max: 1_000_000
 ' --
 
 OBJ

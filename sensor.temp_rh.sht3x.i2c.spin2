@@ -5,7 +5,7 @@
     Description: Driver for Sensirion SHT3x series Temperature/Relative Humidity sensors (P2 version)
     Copyright (c) 2020
     Started Nov 3, 2019
-    Updated Jun 24, 2020
+    Updated Jun 25, 2020
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -24,14 +24,15 @@ CON
     LSB             = 0
 
     NODATA_AVAIL    = $E000_0000
+
 ' Measurement repeatability
-    RPT_LOW         = 0
-    RPT_MED         = 1
-    RPT_HIGH        = 2
+    LOW             = 0
+    MED             = 1
+    HIGH            = 2
 
 ' Measurement modes
-    MMODE_POLL      = 0
-    MMODE_PERIODIC  = 1
+    SINGLE          = 0
+    CONT            = 1
 
 ' Temperature scales
     C               = 0
@@ -269,31 +270,19 @@ PUB Measure(): result | tmp[2]
 '   Returns: Temperature and Humidity as most-significant and least-significant words, respectively (unprocessed)
 '   Also sets variables readable with Temperature and Humidity methods
     case _measure_mode
-        MMODE_POLL:
+        SINGLE:
             case _repeatability
-                RPT_LOW, RPT_MED, RPT_HIGH:
+                LOW, MED, HIGH:
                     readReg(lookupz(_repeatability: core.MEAS_LOWREP, core.MEAS_MEDREP, core.MEAS_HIGHREP), 6, @tmp)
                 OTHER:
                     return
 
-        MMODE_PERIODIC:
+        CONT:
             if readReg(core.FETCHDATA, 6, @tmp) == NODATA_AVAIL
                 return
     _lasttemp := (tmp.byte[5] << 8) | tmp.byte[4]
     _lastrh := (tmp.byte[2] << 8) | tmp.byte[1]
     return (_lasttemp << 16) | (_lastrh)
-
-PUB MeasureMode(mode)
-
-    case mode
-        MMODE_POLL:
-            Break
-        MMODE_PERIODIC:
-            MeasureRate (_mps)
-        OTHER:
-            return _measure_mode
-
-    _measure_mode := mode
 
 PUB MeasureRate(mps) | tmp
 ' Set measurement rate (for periodic measure mode), in measurements per second
@@ -320,14 +309,26 @@ PUB MeasureRate(mps) | tmp
             return _mps
     Break                                                       ' Stop any measurements that might be ongoing
     writeReg(tmp, 0, 0)
-    _measure_mode := MMODE_PERIODIC
+    _measure_mode := CONT
+
+PUB OpMode(mode): curr_mode
+' Set device operating mode
+    case mode
+        SINGLE:
+            Break()
+        CONT:
+            MeasureRate (_mps)
+        OTHER:
+            return _measure_mode
+
+    _measure_mode := mode
 
 PUB Repeatability(level): result | tmp
 ' Set measurement repeatability/stability
-'   Valid values: RPT_LOW (0), RPT_MED (1), RPT_HIGH (2)
+'   Valid values: LOW (0), RPT_MED (1), HIGH (2)
 '   Any other value returns the current setting
     case level
-        RPT_LOW, RPT_MED, RPT_HIGH:
+        LOW, MED, HIGH:
             _repeatability := level
         OTHER:
             return _repeatability
