@@ -5,7 +5,7 @@
     Description: Driver for Sensirion SHT3x series Temperature/Relative Humidity sensors (P2 version)
     Copyright (c) 2020
     Started Nov 3, 2019
-    Updated Jun 25, 2020
+    Updated Jul 14, 2020
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -511,7 +511,7 @@ PRI temp9bit_C(temp_9b): result | scale
         OTHER:
             return
 
-PRI readReg(reg_nr, nr_bytes, buff_addr) | cmd_packet, tmp, ackbit
+PRI readReg(reg_nr, nr_bytes, buff_addr): result | cmd_packet, tmp, ackbit
 ' Read nr_bytes from the slave device into the address stored in buff_addr
     writeReg(reg_nr, 0, 0)
     case reg_nr                                                 'Basic register validation
