@@ -92,7 +92,7 @@ CON
         FLD_HEATER          = 13
         FLD_ALERTPENDING    = 15
 
-#ifndef __propeller2
+#ifndef __propeller2__
 PUB Null
 '' This is not a top-level object
 #endif
