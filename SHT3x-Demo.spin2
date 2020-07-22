@@ -36,8 +36,8 @@ CON
     SER_BAUD        = 2_000_000
 
 ' I2C
-    SCL_PIN         = 32
-    SDA_PIN         = 34
+    SCL_PIN         = 8
+    SDA_PIN         = 9
     ADDR_BIT        = 0                                     ' Can be 0, or 1 for a second device on the bus
     I2C_HZ          = 1_000_000                             ' Max: 1_000_000
 ' --
