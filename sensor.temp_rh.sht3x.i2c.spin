@@ -184,30 +184,26 @@ PUB IntRHLoClear(level): curr_lvl
     case level
         0..100:
             level := rhpct_7bit (level)
-        OTHER:
+        other:
             return rh7bit_pct (curr_lvl)
 
     level := (curr_lvl & core#MASK_ALERTLIM_RH) | level
     writereg(core#ALERTLIM_WR_LO_CLR, 2, @level)
 
-PUB IntRHLoThresh(level): curr_level | tmp
+PUB IntRHLoThresh(level): curr_lvl
 ' Low RH interrupt: trigger level, in percent
 '   Valid values: 0..100
 '   Any other value polls the chip and returns the current setting, in hundredths of a percent
-    tmp := 0
-    readReg(core#ALERTLIM_RD_LO_SET, 3, @tmp)
+    curr_lvl := 0
+    readreg(core#ALERTLIM_RD_LO_SET, 2, @curr_lvl)
     case level
         0..100:
-            level := rhPct_7bit (level)
-        OTHER:
-            tmp >>= 8                                           ' Chop off CRC
-            curr_level := rh7bit_Pct (tmp)
-            return
+            level := rhpct_7bit (level)
+        other:
+            return rh7bit_Pct (curr_lvl)
 
-    tmp >>= 8
-    tmp &= core#MASK_ALERTLIM_RH
-    tmp := (tmp | level)
-    writeReg(core#ALERTLIM_WR_LO_SET, 2, @tmp)
+    level := (curr_lvl & core#MASK_ALERTLIM_RH) | level
+    writereg(core#ALERTLIM_WR_LO_SET, 2, @level)
 
 PUB IntTempHiClear(level): curr_level | tmp
 ' High temperature interrupt: clear level, in degrees C
