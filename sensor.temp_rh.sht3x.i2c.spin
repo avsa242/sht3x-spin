@@ -307,8 +307,7 @@ PUB RHAlertRaw7(rh_pct): result
 '   NOTE: Value is left-justified in MSB of word
     case rh_pct
         0..100:
-            result := (((rh_pct * 100) / 100 * core#ADC_MAX) / 100) & $FE00
-            return
+            return (((rh_pct * 100) / core#ADC_MAX_X100) / 100) & $FE00
         OTHER:
             return
 
