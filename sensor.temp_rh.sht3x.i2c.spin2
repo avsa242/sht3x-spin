@@ -238,25 +238,20 @@ PUB IntTempLoClear(level=-256): curr_lvl
     level := (curr_lvl & core#MASK_ALERTLIM_TEMP) | level
     writereg(core#ALERTLIM_WR_LO_CLR, 2, @level)
 
-PUB IntTempLoThresh(level): curr_level | tmp
+PUB IntTempLoThresh(level): curr_lvl
 ' Low temperature interrupt: trigger level, in degrees C
 '   Valid values: -45..130
 '   Any other value polls the chip and returns the current setting, in hundredths of a degree C
-    tmp := 0
-    readReg(core.ALERTLIM_RD_LO_SET, 3, @tmp)
+    curr_lvl := 0
+    readreg(core#ALERTLIM_RD_LO_SET, 2, @curr_lvl)
     case level
         -45..130:
             level := tempC_9bit (level)
-        OTHER:
-            tmp >>= 8                                           ' Chop off CRC
-            tmp &= $1FF
-            result := temp9bit_C (tmp)
-            return
+        other:
+            return temp9bit_C (curr_lvl & $1ff)
 
-    tmp >>= 8
-    tmp &= core.MASK_ALERTLIM_TEMP
-    tmp := (tmp | level)
-    writeReg(core.ALERTLIM_WR_LO_SET, 2, @tmp)
+    level := (curr_lvl & core#MASK_ALERTLIM_TEMP) | level
+    writereg(core#ALERTLIM_WR_LO_SET, 2, @level)
 
 PUB LastHumidity(): rh
 ' Previous Relative Humidity measurement, in hundredths of a percent
