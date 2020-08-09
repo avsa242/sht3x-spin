@@ -48,36 +48,36 @@ OBJ
 
 PUB Main{} | temp, rh
 
-    Setup{}
+    setup{}
 
-    sht3x.Heater(FALSE)                                     ' Enable/Disable built-in heater
-    sht3x.Repeatability (LOW)                               ' Measurement repeatability (on-chip averaging)
-    sht3x.TempScale(C)                                      ' Temperature scale
+    sht3x.heaterenabled(FALSE)                              ' Enable/Disable built-in heater
+    sht3x.repeatability (LOW)                               ' Measurement repeatability (on-chip averaging)
+    sht3x.tempscale(C)                                      ' Temperature scale
 
     repeat
         ser.position(0, 3)
 
         ser.str(string("Previous temperature: "))
-        DecimalDot(sht3x.LastTemperature{}, 100)
-        ser.newline
+        decimaldot(sht3x.lasttemperature{}, 100)
+        ser.newline{}
 
-        ser.str(string("Current Temperature: "))
-        DecimalDot(sht3x.Temperature{}, 100)
-        ser.newline
+        ser.str(string("Current temperature: "))
+        decimaldot(sht3x.temperature{}, 100)
+        ser.newline{}
 
         ser.str(string("Previous humidity: "))
-        DecimalDot(sht3x.LastHumidity{}, 100)
-        ser.newline
+        decimaldot(sht3x.lasthumidity{}, 100)
+        ser.newline{}
 
         ser.str(string("Relative humidity: "))
-        DecimalDot(sht3x.Humidity{}, 100)
-        ser.newline
+        decimaldot(sht3x.humidity{}, 100)
+        ser.newline{}
 
         time.msleep (1000)
 
 PRI DecimalDot(scaled, divisor) | whole[4], part[4], places, tmp
 ' Display a fixed-point scaled up number in decimal-dot notation - scale it back down by divisor
-'   e.g., Decimal (314159, 100000) would display 3.14159 on the termainl
+'   e.g., Decimal (314159, 100000) would display 3.14159 on the terminal
 '   scaled: Fixed-point scaled up number
 '   divisor: Divide scaled-up number by this amount
     whole := scaled / divisor
@@ -88,26 +88,26 @@ PRI DecimalDot(scaled, divisor) | whole[4], part[4], places, tmp
         tmp /= 10
         places++
     until tmp == 1
-    part := int.DecZeroed(||(scaled // divisor), places)
+    part := int.deczeroed(||(scaled // divisor), places)
 
-    ser.Dec (whole)
-    ser.Char (".")
-    ser.Str (part)
+    ser.dec (whole)
+    ser.char (".")
+    ser.str (part)
     ser.clearline(ser#CLR_CUR_TO_END)
 
 PUB Setup{}
 
-    repeat until ser.StartRXTX (SER_RX, SER_TX, 0, SER_BAUD)
+    repeat until ser.startrxtx (SER_RX, SER_TX, 0, SER_BAUD)
     time.msleep(30)
-    ser.Clear{}
+    ser.clear{}
     ser.str(string("Serial terminal started", ser#CR, ser#LF))
 
-    if sht3x.Startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT)
-        ser.printf(string("SHT3x driver (S/N %x) started\n"), sht3x.SerialNum{}, 0, 0, 0, 0, 0)
-        sht3x.ClearStatus{}
+    if sht3x.startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT)
+        ser.printf(string("SHT3x driver (S/N %x) started\n"), sht3x.serialnum{}, 0, 0, 0, 0, 0)
+        sht3x.clearstatus{}
     else
         ser.str(string("SHT3x driver failed to start - halting"))
-        FlashLED(LED, 500)
+        flashled(LED, 500)
 
 #include "lib.utility.spin"
 

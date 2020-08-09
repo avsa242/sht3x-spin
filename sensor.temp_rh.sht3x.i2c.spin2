@@ -60,7 +60,7 @@ PUB Start(SCL_PIN, SDA_PIN, I2C_HZ=100_000, ADDR_BIT=0): okay
         if I2C_HZ <= core.I2C_MAX_FREQ
             if okay := i2c.setup (SCL_PIN, SDA_PIN, I2C_HZ)     'I2C Object Started?
                 waitms (1)
-                (_addr_bit) ? (1 << 1) : 0
+                _addr_bit := (ADDR_BIT) ? (1 << 1) : 0
                 if i2c.present (SLAVE_WR | _addr_bit)           'Response from device?
                     if serialnum()
                         reset()
