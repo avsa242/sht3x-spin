@@ -205,25 +205,20 @@ PUB IntRHLoThresh(level): curr_lvl
     level := (curr_lvl & core#MASK_ALERTLIM_RH) | level
     writereg(core#ALERTLIM_WR_LO_SET, 2, @level)
 
-PUB IntTempHiClear(level): curr_level | tmp
+PUB IntTempHiClear(level): curr_lvl
 ' High temperature interrupt: clear level, in degrees C
 '   Valid values: -45..130
 '   Any other value polls the chip and returns the current setting, in hundredths of a degree C
-    tmp := 0
-    readReg(core#ALERTLIM_RD_HI_CLR, 3, @tmp)
+    curr_lvl := 0
+    readreg(core#ALERTLIM_RD_HI_CLR, 2, @curr_lvl)
     case level
         -45..130:
-            level := tempC_9bit (level)
-        OTHER:
-            tmp >>= 8                                           ' Chop off CRC
-            tmp &= $1FF
-            curr_level := temp9bit_C (tmp)
-            return
+            level := tempc_9bit (level)
+        other:
+            return temp9bit_c (curr_lvl & $1ff)
 
-    tmp >>= 8
-    tmp &= core#MASK_ALERTLIM_TEMP
-    tmp := (tmp | level)
-    writeReg(core#ALERTLIM_WR_HI_CLR, 2, @tmp)
+    level := (curr_lvl & core#MASK_ALERTLIM_TEMP) | level
+    writereg(core#ALERTLIM_WR_HI_CLR, 2, @level)
 
 PUB IntTempHiThresh(level): curr_level | tmp
 ' High temperature interrupt: trigger level, in degrees C
