@@ -300,53 +300,6 @@ PUB Repeatability(level): result | tmp
         OTHER:
             return _repeatability
 
-PUB RHAlertRaw7(rh_pct): result
-' Converts Percent RH to 7-bit value, for use with alert threshold setting
-'   Valid values: 0..100
-'   Any other value is ignored
-'   NOTE: Value is left-justified in MSB of word
-    case rh_pct
-        0..100:
-            return (((rh_pct * 100) / core#ADC_MAX_X100) / 100) & $FE00
-        OTHER:
-            return
-
-PUB RHAlertPct(rh_7b): result
-' Converts 7-bit value to Percent RH, for use with alert threshold settings
-'   Valid values: $02xx..$FExx (xx = 00)
-'   NOTE: Value must be left-justified in MSB of word
-    rh_7b &= $FE00                                              ' Mask off temperature
-    rh_7b *= 10000                                              ' Scale up
-    rh_7b /= core#ADC_MAX                                       ' Scale to %
-    result := rh_7b
-    return
-
-PUB TempAlertRaw9(temp_c): result | scale
-' Converts degrees C to 9-bit value, for use with alert threshold settings
-'   Valid values: -45..130
-    case temp_c
-        -45..130:
-            scale := 10_000                                     ' Fixed-point scale
-            result := ((((temp_c * scale) + (45 * scale)) / 175 * core#ADC_MAX)) / scale
-            result := (result >> 7) & $001FF
-            return
-        OTHER:
-            return
-
-PUB TempAlertDeg(temp_9b): result | scale
-' Converts raw 9-bit value to temperature in
-'   Returns: hundredths of a degree C (0..511 ror -4500..12966 or -45.00C 129.66C)
-'   Valid values: 0..511
-'   Any other value is ignored
-    scale := 100
-    case temp_9b
-        0..511:
-            result := (temp_9b << 7)
-            result := ((175 * (result * scale)) / core#ADC_MAX)-(45 * scale)
-            return
-        OTHER:
-            return
-
 PUB Temperature{}: temp | tmp[2]
 ' Current Temperature, in hundredths of a degree
 '   Returns: Integer
