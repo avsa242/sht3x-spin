@@ -54,7 +54,7 @@ OBJ
 PUB Null()
 ' This is not a top-level object
 
-PUB Start(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT): okay
+PUB Start(SCL_PIN, SDA_PIN, I2C_HZ=100_000, ADDR_BIT=0): okay
 
     if lookdown(SCL_PIN: 0..63) and lookdown(SDA_PIN: 0..63)
         if I2C_HZ <= core.I2C_MAX_FREQ
@@ -75,7 +75,7 @@ PUB ClearStatus()
 ' Clears the status register
     writeReg(core.CLEARSTATUS, 0, 0)
 
-PUB DataRate(Hz): curr_rate | tmp
+PUB DataRate(Hz=-2): curr_rate | tmp
 ' Output data rate, in Hz
 '   Valid values: 0_5 (0.5Hz), 1, 2, 4, 10
 '   Any other value returns the current setting
@@ -148,7 +148,7 @@ PUB IntRHHiClear(level=-2): curr_lvl
     level := (curr_lvl & core#MASK_ALERTLIM_RH) | level
     writereg(core#ALERTLIM_WR_HI_CLR, 2, @level)
 
-PUB IntRHHiThresh(level): curr_lvl
+PUB IntRHHiThresh(level=-2): curr_lvl
 ' High RH interrupt: trigger level, in percent
 '   Valid values: 0..100
 '   Any other value polls the chip and returns the current setting, in hundredths of a percent
@@ -238,7 +238,7 @@ PUB IntTempLoClear(level=-256): curr_lvl
     level := (curr_lvl & core#MASK_ALERTLIM_TEMP) | level
     writereg(core#ALERTLIM_WR_LO_CLR, 2, @level)
 
-PUB IntTempLoThresh(level): curr_lvl
+PUB IntTempLoThresh(level=-256): curr_lvl
 ' Low temperature interrupt: trigger level, in degrees C
 '   Valid values: -45..130
 '   Any other value polls the chip and returns the current setting, in hundredths of a degree C
@@ -246,9 +246,9 @@ PUB IntTempLoThresh(level): curr_lvl
     readreg(core#ALERTLIM_RD_LO_SET, 2, @curr_lvl)
     case level
         -45..130:
-            level := tempC_9bit (level)
+            level := tempc_9bit (level)
         other:
-            return temp9bit_C (curr_lvl & $1ff)
+            return temp9bit_c (curr_lvl & $1ff)
 
     level := (curr_lvl & core#MASK_ALERTLIM_TEMP) | level
     writereg(core#ALERTLIM_WR_LO_SET, 2, @level)
@@ -265,8 +265,12 @@ PUB LastTemperature(): temp
 '   (e.g., 2105 is equivalent to 21.05 deg C)
     return calcTemp(_lasttemp)
 
-PUB OpMode(mode): curr_mode
+PUB OpMode(mode=-2): curr_mode
 ' Set device operating mode
+'   Valid values
+'      *SINGLE (0): single-shot measurements
+'       CONT (1): continuously measure
+'   Any other value returns the current setting
     case mode
         SINGLE:
             stopContMeas()
@@ -278,27 +282,15 @@ PUB OpMode(mode): curr_mode
 
     _measure_mode := mode
 
-PUB Repeatability(level): result | tmp
+PUB Repeatability(level=-2): result | tmp
 ' Set measurement repeatability/stability
-'   Valid values: LOW (0), RPT_MED (1), HIGH (2)
+'   Valid values: LOW (0), MED (1), HIGH (2)
 '   Any other value returns the current setting
     case level
         LOW, MED, HIGH:
             _repeatability := level
         OTHER:
             return _repeatability
-
-'   Returns: hundredths of a degree C (0..511 ror -4500..12966 or -45.00C 129.66C)
-'   Valid values: 0..511
-'   Any other value is ignored
-    scale := 100
-    case temp_9b
-        0..511:
-            result := (temp_9b << 7)
-            result := ((175 * (result * scale)) / core.ADC_MAX)-(45 * scale)
-            return
-        OTHER:
-            return
 
 PUB Temperature(): temp | tmp[2]
 ' Current Temperature, in hundredths of a degree

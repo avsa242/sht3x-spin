@@ -279,6 +279,10 @@ PUB LastTemperature{}: temp
 
 PUB OpMode(mode): curr_mode
 ' Set device operating mode
+'   Valid values
+'      *SINGLE (0): single-shot measurements
+'       CONT (1): continuously measure
+'   Any other value returns the current setting
     case mode
         SINGLE:
             stopContMeas{}
@@ -292,7 +296,7 @@ PUB OpMode(mode): curr_mode
 
 PUB Repeatability(level): result | tmp
 ' Set measurement repeatability/stability
-'   Valid values: LOW (0), RPT_MED (1), HIGH (2)
+'   Valid values: LOW (0), MED (1), HIGH (2)
 '   Any other value returns the current setting
     case level
         LOW, MED, HIGH:
