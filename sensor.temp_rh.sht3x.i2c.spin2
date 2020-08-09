@@ -328,17 +328,19 @@ PUB Reset()
     writereg(core.SOFTRESET, 0, 0)
     waitms (1)
 
-PUB LastCRC(): result
+PUB LastCRCOK(): flag
+' Flag indicating CRC of last command was good
+'   Returns: TRUE (-1) if CRC was good, FALSE (0) otherwise
+    flag := 0
+    readreg(core#STATUS, 2, @flag)
+    return (flag & %1) == 0
 
-    result := 0
-    readreg(core.STATUS, 3, @result)
-    result := (result & %1) * TRUE
-
-PUB LastCMD(): result
-
-    result := 0
-    readreg(core.STATUS, 3, @result)
-    result := ((result >> 1) & %1) * TRUE
+PUB LastCMDOK(): flag
+' Flag indicating last command executed without error
+'   Returns: TRUE (-1) if no error, FALSE (0) otherwise
+    flag := 0
+    readreg(core#STATUS, 2, @flag)
+    return ((flag >> 1) & %1) == 0
 
 PRI calcRH(rh_word): rh_cal
 
