@@ -96,8 +96,7 @@ PUB Setup()
     ser.printf("Serial terminal started\n")
 
     if sht3x.start(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT)
-        ser.printf("SHT3x driver (S/N %x) started\n", sht3x.SerialNum())
-        sht3x.clearstatus()
+        ser.printf("SHT3x driver (S/N %x) started\n", sht3x.serialnum())
     else
         ser.printf("SHT3x driver failed to start - halting")
         flashled(LED, 500)

@@ -75,6 +75,7 @@ PUB Startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT): okay
                 if i2c.present (SLAVE_WR | _addr_bit)           'Response from device?
                     if serialnum{}
                         reset{}
+                        clearstatus{}
                         return okay
 
     return FALSE                                                'If we got here, something went wrong
@@ -86,6 +87,7 @@ PUB Stop{}
 PUB ClearStatus{}
 ' Clears the status register
     writereg(core#CLEARSTATUS, 0, 0)
+    time.msleep(1)
 
 PUB DataRate(Hz): curr_rate | tmp
 ' Output data rate, in Hz
