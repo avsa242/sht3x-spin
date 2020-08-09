@@ -442,31 +442,16 @@ PRI temp9bit_C(temp_9b): result | scale
         other:
             return
 
-PRI readReg(reg_nr, nr_bytes, buff_addr): result | cmd_packet, tmp, ackbit
+PRI readReg(reg_nr, nr_bytes, buff_addr): result | cmd_packet, tmp, ackbit, delay
 ' Read nr_bytes from the slave device into the address stored in buff_addr
-    writereg(reg_nr, 0, 0)
+    delay := 0
     case reg_nr                                                 'Basic register validation
         core#READ_SERIALNUM:                                    'S/N Read Needs delay before repeated start
-            time.usleep (500)
-        core#MEAS_HIGHREP..core#MEAS_LOWREP:
-        core#STATUS:
-        core#FETCHDATA:
-        core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET, core#ALERTLIM_RD_LO_SET..core#ALERTLIM_RD_HI_SET:
+            delay := 500
+        core#MEAS_HIGHREP..core#MEAS_LOWREP, core#STATUS, core#FETCHDATA, core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET, core#ALERTLIM_RD_LO_SET..core#ALERTLIM_RD_HI_SET:
         other:
             return
 
-    i2c.start{}
-    ackbit := i2c.write (SLAVE_RD | _addr_bit)
-    if ackbit == i2c#NAK
-        i2c.stop{}
-        return NODATA_AVAIL                                     'NAK from sensor - no data available
-    repeat tmp from nr_bytes-1 to 0
-        byte[buff_addr][tmp] := i2c.read (tmp == 0)
-    i2c.stop{}
-    return
-
-PRI writeReg(reg_nr, nr_bytes, buff_addr) | cmd_packet, tmp, chk
-' Write nr_bytes to the slave device from the address stored in buff_addr
     cmd_packet.byte[0] := (SLAVE_WR | _addr_bit)
     cmd_packet.byte[1] := reg_nr.byte[MSB]
     cmd_packet.byte[2] := reg_nr.byte[LSB]
@@ -475,24 +460,46 @@ PRI writeReg(reg_nr, nr_bytes, buff_addr) | cmd_packet, tmp, chk
     repeat tmp from 0 to 2
         i2c.write (cmd_packet.byte[tmp])
 
-    if nr_bytes > 0
-        chk := crc.sensirioncrc8 (buff_addr, 2)
-        swap(buff_addr)
-        byte[buff_addr][2] := chk
+    time.usleep(delay)
+
+    i2c.start{}
+    ackbit := i2c.write (SLAVE_RD | _addr_bit)
+    if ackbit == i2c#NAK                                        ' If NAK received from sensor,
+        i2c.stop{}                                              '   Stop early. It means there's
+        return NODATA_AVAIL                                     '   no data available.
+    repeat tmp from nr_bytes-1 to 0
+        byte[buff_addr][tmp] := i2c.read (tmp == 0)
+    i2c.stop{}
+
+PRI writeReg(reg_nr, nr_bytes, buff_addr) | cmd_packet, tmp, chk, delay
+' Write nr_bytes to the slave device from the address stored in buff_addr
+    delay := chk := 0
+    case reg_nr                                             ' Basic register validation
+        core#CLEARSTATUS, core#HEATEREN, core#HEATERDIS:
+        core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET, core#ALERTLIM_RD_LO_SET..core#ALERTLIM_RD_HI_SET:
+            chk := crc.sensirioncrc8 (buff_addr, 2)         ' Interrupt threshold writes require
+            swap(buff_addr)                                 '   CRC byte after thresholds
+            byte[buff_addr][2] := chk
+        core#MEAS_HIGHREP..core#MEAS_LOWREP:
+            delay := 20                                     ' Post-write delay
+        core#SOFTRESET:
+            delay := 10
+        other:
+            return
+
+    cmd_packet.byte[0] := (SLAVE_WR | _addr_bit)
+    cmd_packet.byte[1] := reg_nr.byte[MSB]
+    cmd_packet.byte[2] := reg_nr.byte[LSB]
+
+    i2c.start{}
+    repeat tmp from 0 to 2
+        i2c.write (cmd_packet.byte[tmp])
+
+    if chk                                                  ' Interrupt thresholds need CRC byte after
         repeat tmp from 0 to nr_bytes
             i2c.write (byte[buff_addr][tmp])
     i2c.stop{}
-    result := long[buff_addr]
-    case reg_nr                                                 'Basic register validation
-        core#CLEARSTATUS:
-        core#HEATEREN, core#HEATERDIS:
-        core#MEAS_HIGHREP..core#MEAS_LOWREP:
-            time.msleep (20)
-        core#SOFTRESET:
-            time.msleep (10)
-        core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET, core#ALERTLIM_RD_LO_SET..core#ALERTLIM_RD_HI_SET:
-        other:
-            return
+    time.msleep(delay)
 
 DAT
 {
