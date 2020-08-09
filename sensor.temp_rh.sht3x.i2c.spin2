@@ -58,12 +58,12 @@ PUB Start(SCL_PIN, SDA_PIN, I2C_HZ=100_000, ADDR_BIT=0): okay
 
     if lookdown(SCL_PIN: 0..63) and lookdown(SDA_PIN: 0..63)
         if I2C_HZ <= core.I2C_MAX_FREQ
-            if okay := i2c.Setup (SCL_PIN, SDA_PIN, I2C_HZ)     'I2C Object Started?
+            if okay := i2c.setup (SCL_PIN, SDA_PIN, I2C_HZ)     'I2C Object Started?
                 waitms (1)
                 (_addr_bit) ? (1 << 1) : 0
                 if i2c.present (SLAVE_WR | _addr_bit)           'Response from device?
-                    if SerialNum()
-                        Reset()
+                    if serialnum()
+                        reset()
                         return okay
 
     return FALSE                                                'If we got here, something went wrong
@@ -73,7 +73,7 @@ PUB Stop()
 
 PUB ClearStatus()
 ' Clears the status register
-    writeReg(core.CLEARSTATUS, 0, 0)
+    writereg(core.CLEARSTATUS, 0, 0)
 
 PUB DataRate(Hz=-2): curr_rate | tmp
 ' Output data rate, in Hz
@@ -97,10 +97,10 @@ PUB DataRate(Hz=-2): curr_rate | tmp
         10:
             tmp := core.MEAS_PERIODIC_10 | lookupz(_repeatability: core.RPT_LO_10, core.RPT_MED_10, core.RPT_HI_10)
             _drate_hz := Hz
-        OTHER:
+        other:
             return _drate_hz
-    stopContMeas()                                              ' Stop any measurements that might be ongoing
-    writeReg(tmp, 0, 0)
+    stopcontmeas()                                              ' Stop any measurements that might be ongoing
+    writereg(tmp, 0, 0)
     _measure_mode := CONT
 
 PUB HeaterEnabled(state=-2): curr_state
@@ -124,14 +124,14 @@ PUB Humidity(): rh | tmp[2]
 '   (e.g., 4762 is equivalent to 47.62%)
     case _measure_mode
         SINGLE:
-            oneShotMeasure(@tmp)
+            oneshotmeasure(@tmp)
 
         CONT:
-            pollMeasure(@tmp)
+            pollmeasure(@tmp)
 
     _lastrh := (tmp.byte[2] << 8) | tmp.byte[1]
 
-    return calcRH(_lastrh)
+    return calcrh(_lastrh)
 
 PUB IntRHHiClear(level=-2): curr_lvl
 ' High RH interrupt: clear level, in percent
@@ -172,7 +172,7 @@ PUB IntRHLoClear(level=-2): curr_lvl
     case level
         0..100:
             level := rhpct_7bit (level)
-        OTHER:
+        other:
             return rh7bit_pct (curr_lvl)
 
     level := (curr_lvl & core#MASK_ALERTLIM_RH) | level
@@ -188,7 +188,7 @@ PUB IntRHLoThresh(level=-2): curr_lvl
         0..100:
             level := rhpct_7bit (level)
         other:
-            return rh7bit_Pct (curr_lvl)
+            return rh7bit_pct (curr_lvl)
 
     level := (curr_lvl & core#MASK_ALERTLIM_RH) | level
     writereg(core#ALERTLIM_WR_LO_SET, 2, @level)
@@ -213,7 +213,7 @@ PUB IntTempHiThresh(level=-256): curr_lvl
 '   Valid values: -45..130
 '   Any other value polls the chip and returns the current setting, in hundredths of a degree C
     curr_lvl := 0
-    readreg(core#ALERTLIM_RD_HI_SET, 3, @curr_lvl)
+    readreg(core#ALERTLIM_RD_HI_SET, 2, @curr_lvl)
     case level
         -45..130:
             level := tempc_9bit (level)
@@ -257,13 +257,13 @@ PUB LastHumidity(): rh
 ' Previous Relative Humidity measurement, in hundredths of a percent
 '   Returns: Integer
 '   (e.g., 4762 is equivalent to 47.62%)
-    return calcRH(_lastrh)
+    return calcrh(_lastrh)
 
 PUB LastTemperature(): temp
 ' Previous Temperature measurement, in hundredths of a degree
 '   Returns: Integer
 '   (e.g., 2105 is equivalent to 21.05 deg C)
-    return calcTemp(_lasttemp)
+    return calctemp(_lasttemp)
 
 PUB OpMode(mode=-2): curr_mode
 ' Set device operating mode
@@ -273,11 +273,11 @@ PUB OpMode(mode=-2): curr_mode
 '   Any other value returns the current setting
     case mode
         SINGLE:
-            stopContMeas()
+            stopcontmeas()
         CONT:
-            stopContMeas()
-            DataRate (_drate_hz)
-        OTHER:
+            stopcontmeas()
+            datarate (_drate_hz)
+        other:
             return _measure_mode
 
     _measure_mode := mode
@@ -289,7 +289,7 @@ PUB Repeatability(level=-2): result | tmp
     case level
         LOW, MED, HIGH:
             _repeatability := level
-        OTHER:
+        other:
             return _repeatability
 
 PUB Temperature(): temp | tmp[2]
@@ -298,14 +298,14 @@ PUB Temperature(): temp | tmp[2]
 '   (e.g., 2105 is equivalent to 21.05 deg C)
     case _measure_mode
         SINGLE:
-            oneShotMeasure(@tmp)
+            oneshotmeasure(@tmp)
 
         CONT:
-            pollMeasure(@tmp)
+            pollmeasure(@tmp)
 
     _lasttemp := (tmp.byte[5] << 8) | tmp.byte[4]
 
-    return calcTemp(_lasttemp)
+    return calctemp(_lasttemp)
 
 PUB TempScale(scale=-2): curr_scale
 ' Set temperature scale used by Temperature method
@@ -316,28 +316,28 @@ PUB TempScale(scale=-2): curr_scale
     case scale
         C, F:
             _temp_scale := scale
-        OTHER:
+        other:
             return _temp_scale
 
 PUB SerialNum(): result
 ' Return device Serial Number
-    readReg(core.READ_SERIALNUM, 4, @result)
+    readreg(core.READ_SERIALNUM, 4, @result)
 
 PUB Reset()
 ' Perform Soft Reset
-    writeReg(core.SOFTRESET, 0, 0)
+    writereg(core.SOFTRESET, 0, 0)
     waitms (1)
 
 PUB LastCRC(): result
 
     result := 0
-    readReg(core.STATUS, 3, @result)
+    readreg(core.STATUS, 3, @result)
     result := (result & %1) * TRUE
 
 PUB LastCMD(): result
 
     result := 0
-    readReg(core.STATUS, 3, @result)
+    readreg(core.STATUS, 3, @result)
     result := ((result >> 1) & %1) * TRUE
 
 PRI calcRH(rh_word): rh_cal
@@ -351,20 +351,20 @@ PRI calcTemp(temp_word): temp_cal
             return ((175 * (temp_word * 100)) / core.ADC_MAX)-(45 * 100)
         F:
             return ((315 * (temp_word * 100)) / core.ADC_MAX)-(49 * 100)
-        OTHER:
+        other:
             return FALSE
 
 PRI oneShotMeasure(buff_addr)
 
     case _repeatability
         LOW, MED, HIGH:
-            readReg(lookupz(_repeatability: core.MEAS_LOWREP, core.MEAS_MEDREP, core.MEAS_HIGHREP), 6, buff_addr)
-        OTHER:
+            readreg(lookupz(_repeatability: core.MEAS_LOWREP, core.MEAS_MEDREP, core.MEAS_HIGHREP), 6, buff_addr)
+        other:
             return
 
 PRI pollMeasure(buff_addr)
 
-    if readReg(core.FETCHDATA, 6, buff_addr) == NODATA_AVAIL
+    if readreg(core.FETCHDATA, 6, buff_addr) == NODATA_AVAIL
         return
 
 PRI rhPct_7bit(rh_pct): result
@@ -376,7 +376,7 @@ PRI rhPct_7bit(rh_pct): result
         0..100:
             result := (((rh_pct * 100) / 100 * core.ADC_MAX) / 100) & $FE00
             return
-        OTHER:
+        other:
             return
 
 PRI rh7bit_Pct(rh_7b): result
@@ -391,7 +391,7 @@ PRI rh7bit_Pct(rh_7b): result
 
 PRI stopContMeas()
 ' Stop continuous measurement mode
-    writeReg(core.BREAK_STOP, 0, 0)
+    writereg(core.BREAK_STOP, 0, 0)
 
 PRI swap (word_addr)
 ' Swap byte order of a WORD
@@ -409,7 +409,7 @@ PRI tempC_9bit(temp_c): result | scale
             result := ((((temp_c * scale) + (45 * scale)) / 175 * core.ADC_MAX)) / scale
             result := (result >> 7) & $001FF
             return
-        OTHER:
+        other:
             return
 
 PRI temp9bit_C(temp_9b): result | scale
@@ -423,12 +423,12 @@ PRI temp9bit_C(temp_9b): result | scale
             result := (temp_9b << 7)
             result := ((175 * (result * scale)) / core.ADC_MAX)-(45 * scale)
             return
-        OTHER:
+        other:
             return
 
 PRI readReg(reg_nr, nr_bytes, buff_addr): result | cmd_packet, tmp, ackbit
 ' Read nr_bytes from the slave device into the address stored in buff_addr
-    writeReg(reg_nr, 0, 0)
+    writereg(reg_nr, 0, 0)
     case reg_nr                                                 'Basic register validation
         core.READ_SERIALNUM:                                    'S/N Read Needs delay before repeated start
             waitus (500)
@@ -436,7 +436,7 @@ PRI readReg(reg_nr, nr_bytes, buff_addr): result | cmd_packet, tmp, ackbit
         core.STATUS:
         core.FETCHDATA:
         core.ALERTLIM_WR_LO_SET..core.ALERTLIM_WR_HI_SET, core.ALERTLIM_RD_LO_SET..core.ALERTLIM_RD_HI_SET:
-        OTHER:
+        other:
             return
 
     i2c.start()
@@ -460,7 +460,7 @@ PRI writeReg(reg_nr, nr_bytes, buff_addr) | cmd_packet, tmp, chk
         i2c.write (cmd_packet.byte[tmp])
 
     if nr_bytes > 0
-        chk := crc.SensirionCRC8 (buff_addr, 2)
+        chk := crc.sensirioncrc8 (buff_addr, 2)
         swap(buff_addr)
         byte[buff_addr][2] := chk
         repeat tmp from 0 to nr_bytes
@@ -475,7 +475,7 @@ PRI writeReg(reg_nr, nr_bytes, buff_addr) | cmd_packet, tmp, chk
         core.SOFTRESET:
             waitms (10)
         core.ALERTLIM_WR_LO_SET..core.ALERTLIM_WR_HI_SET, core.ALERTLIM_RD_LO_SET..core.ALERTLIM_RD_HI_SET:
-        OTHER:
+        other:
             return
 
 DAT

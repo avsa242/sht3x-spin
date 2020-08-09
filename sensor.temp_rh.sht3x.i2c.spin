@@ -70,11 +70,11 @@ PUB Startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT): okay
                 case ADDR_BIT
                     0:
                         _addr_bit := 0
-                    OTHER:
+                    other:
                         _addr_bit := 1 << 1
                 if i2c.present (SLAVE_WR | _addr_bit)           'Response from device?
-                    if SerialNum{}
-                        Reset{}
+                    if serialnum{}
+                        reset{}
                         return okay
 
     return FALSE                                                'If we got here, something went wrong
@@ -85,7 +85,7 @@ PUB Stop{}
 
 PUB ClearStatus{}
 ' Clears the status register
-    writeReg(core#CLEARSTATUS, 0, 0)
+    writereg(core#CLEARSTATUS, 0, 0)
 
 PUB DataRate(Hz): curr_rate | tmp
 ' Output data rate, in Hz
@@ -109,10 +109,10 @@ PUB DataRate(Hz): curr_rate | tmp
         10:
             tmp := core#MEAS_PERIODIC_10 | lookupz(_repeatability: core#RPT_LO_10, core#RPT_MED_10, core#RPT_HI_10)
             _drate_hz := Hz
-        OTHER:
+        other:
             return _drate_hz
-    stopContMeas{}                                              ' Stop any measurements that might be ongoing
-    writeReg(tmp, 0, 0)
+    stopcontmeas{}                                              ' Stop any measurements that might be ongoing
+    writereg(tmp, 0, 0)
     _measure_mode := CONT
 
 PUB HeaterEnabled(state): curr_state
@@ -136,14 +136,14 @@ PUB Humidity{}: rh | tmp[2]
 '   (e.g., 4762 is equivalent to 47.62%)
     case _measure_mode
         SINGLE:
-            oneShotMeasure(@tmp)
+            oneshotmeasure(@tmp)
 
         CONT:
-            pollMeasure(@tmp)
+            pollmeasure(@tmp)
 
     _lastrh := (tmp.byte[2] << 8) | tmp.byte[1]
 
-    return calcRH(_lastrh)
+    return calcrh(_lastrh)
 
 PUB IntRHHiClear(level): curr_lvl
 ' High RH interrupt: clear level, in percent
@@ -200,7 +200,7 @@ PUB IntRHLoThresh(level): curr_lvl
         0..100:
             level := rhpct_7bit (level)
         other:
-            return rh7bit_Pct (curr_lvl)
+            return rh7bit_pct (curr_lvl)
 
     level := (curr_lvl & core#MASK_ALERTLIM_RH) | level
     writereg(core#ALERTLIM_WR_LO_SET, 2, @level)
@@ -258,9 +258,9 @@ PUB IntTempLoThresh(level): curr_lvl
     readreg(core#ALERTLIM_RD_LO_SET, 2, @curr_lvl)
     case level
         -45..130:
-            level := tempC_9bit (level)
+            level := tempc_9bit (level)
         other:
-            return temp9bit_C (curr_lvl & $1ff)
+            return temp9bit_c (curr_lvl & $1ff)
 
     level := (curr_lvl & core#MASK_ALERTLIM_TEMP) | level
     writereg(core#ALERTLIM_WR_LO_SET, 2, @level)
@@ -269,13 +269,13 @@ PUB LastHumidity{}: rh
 ' Previous Relative Humidity measurement, in hundredths of a percent
 '   Returns: Integer
 '   (e.g., 4762 is equivalent to 47.62%)
-    return calcRH(_lastrh)
+    return calcrh(_lastrh)
 
 PUB LastTemperature{}: temp
 ' Previous Temperature measurement, in hundredths of a degree
 '   Returns: Integer
 '   (e.g., 2105 is equivalent to 21.05 deg C)
-    return calcTemp(_lasttemp)
+    return calctemp(_lasttemp)
 
 PUB OpMode(mode): curr_mode
 ' Set device operating mode
@@ -285,11 +285,11 @@ PUB OpMode(mode): curr_mode
 '   Any other value returns the current setting
     case mode
         SINGLE:
-            stopContMeas{}
+            stopcontmeas{}
         CONT:
-            stopContMeas{}
-            DataRate (_drate_hz)
-        OTHER:
+            stopcontmeas{}
+            datarate (_drate_hz)
+        other:
             return _measure_mode
 
     _measure_mode := mode
@@ -301,7 +301,7 @@ PUB Repeatability(level): result | tmp
     case level
         LOW, MED, HIGH:
             _repeatability := level
-        OTHER:
+        other:
             return _repeatability
 
 PUB Temperature{}: temp | tmp[2]
@@ -310,14 +310,14 @@ PUB Temperature{}: temp | tmp[2]
 '   (e.g., 2105 is equivalent to 21.05 deg C)
     case _measure_mode
         SINGLE:
-            oneShotMeasure(@tmp)
+            oneshotmeasure(@tmp)
 
         CONT:
-            pollMeasure(@tmp)
+            pollmeasure(@tmp)
 
     _lasttemp := (tmp.byte[5] << 8) | tmp.byte[4]
 
-    return calcTemp(_lasttemp)
+    return calctemp(_lasttemp)
 
 PUB TempScale(scale): curr_scale
 ' Set temperature scale used by Temperature method
@@ -328,28 +328,28 @@ PUB TempScale(scale): curr_scale
     case scale
         C, F:
             _temp_scale := scale
-        OTHER:
+        other:
             return _temp_scale
 
 PUB SerialNum{}: result
 ' Return device Serial Number
-    readReg(core#READ_SERIALNUM, 4, @result)
+    readreg(core#READ_SERIALNUM, 4, @result)
 
 PUB Reset{}
 ' Perform Soft Reset
-    writeReg(core#SOFTRESET, 0, 0)
+    writereg(core#SOFTRESET, 0, 0)
     time.msleep (1)
 
 PUB LastCRC{}: result
 
     result := 0
-    readReg(core#STATUS, 3, @result)
+    readreg(core#STATUS, 3, @result)
     result := (result & %1) * TRUE
 
 PUB LastCMD{}: result
 
     result := 0
-    readReg(core#STATUS, 3, @result)
+    readreg(core#STATUS, 3, @result)
     result := ((result >> 1) & %1) * TRUE
 
 PRI calcRH(rh_word): rh_cal
@@ -363,20 +363,20 @@ PRI calcTemp(temp_word): temp_cal
             return ((175 * (temp_word * 100)) / core#ADC_MAX)-(45 * 100)
         F:
             return ((315 * (temp_word * 100)) / core#ADC_MAX)-(49 * 100)
-        OTHER:
+        other:
             return FALSE
 
 PRI oneShotMeasure(buff_addr)
 
     case _repeatability
         LOW, MED, HIGH:
-            readReg(lookupz(_repeatability: core#MEAS_LOWREP, core#MEAS_MEDREP, core#MEAS_HIGHREP), 6, buff_addr)
-        OTHER:
+            readreg(lookupz(_repeatability: core#MEAS_LOWREP, core#MEAS_MEDREP, core#MEAS_HIGHREP), 6, buff_addr)
+        other:
             return
 
 PRI pollMeasure(buff_addr)
 
-    if readReg(core#FETCHDATA, 6, buff_addr) == NODATA_AVAIL
+    if readreg(core#FETCHDATA, 6, buff_addr) == NODATA_AVAIL
         return
 
 PRI rhPct_7bit(rh_pct): result
@@ -388,7 +388,7 @@ PRI rhPct_7bit(rh_pct): result
         0..100:
             result := (((rh_pct * 100) / 100 * core#ADC_MAX) / 100) & $FE00
             return
-        OTHER:
+        other:
             return
 
 PRI rh7bit_Pct(rh_7b): result
@@ -403,7 +403,7 @@ PRI rh7bit_Pct(rh_7b): result
 
 PRI stopContMeas{}
 ' Stop continuous measurement mode
-    writeReg(core#BREAK_STOP, 0, 0)
+    writereg(core#BREAK_STOP, 0, 0)
 
 PRI swap (word_addr)
 ' Swap byte order of a WORD
@@ -421,7 +421,7 @@ PRI tempC_9bit(temp_c): result | scale
             result := ((((temp_c * scale) + (45 * scale)) / 175 * core#ADC_MAX)) / scale
             result := (result >> 7) & $001FF
             return
-        OTHER:
+        other:
             return
 
 PRI temp9bit_C(temp_9b): result | scale
@@ -435,12 +435,12 @@ PRI temp9bit_C(temp_9b): result | scale
             result := (temp_9b << 7)
             result := ((175 * (result * scale)) / core#ADC_MAX)-(45 * scale)
             return
-        OTHER:
+        other:
             return
 
 PRI readReg(reg_nr, nr_bytes, buff_addr): result | cmd_packet, tmp, ackbit
 ' Read nr_bytes from the slave device into the address stored in buff_addr
-    writeReg(reg_nr, 0, 0)
+    writereg(reg_nr, 0, 0)
     case reg_nr                                                 'Basic register validation
         core#READ_SERIALNUM:                                    'S/N Read Needs delay before repeated start
             time.usleep (500)
@@ -448,7 +448,7 @@ PRI readReg(reg_nr, nr_bytes, buff_addr): result | cmd_packet, tmp, ackbit
         core#STATUS:
         core#FETCHDATA:
         core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET, core#ALERTLIM_RD_LO_SET..core#ALERTLIM_RD_HI_SET:
-        OTHER:
+        other:
             return
 
     i2c.start{}
@@ -472,7 +472,7 @@ PRI writeReg(reg_nr, nr_bytes, buff_addr) | cmd_packet, tmp, chk
         i2c.write (cmd_packet.byte[tmp])
 
     if nr_bytes > 0
-        chk := crc.SensirionCRC8 (buff_addr, 2)
+        chk := crc.sensirioncrc8 (buff_addr, 2)
         swap(buff_addr)
         byte[buff_addr][2] := chk
         repeat tmp from 0 to nr_bytes
@@ -487,7 +487,7 @@ PRI writeReg(reg_nr, nr_bytes, buff_addr) | cmd_packet, tmp, chk
         core#SOFTRESET:
             time.msleep (10)
         core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET, core#ALERTLIM_RD_LO_SET..core#ALERTLIM_RD_HI_SET:
-        OTHER:
+        other:
             return
 
 DAT
