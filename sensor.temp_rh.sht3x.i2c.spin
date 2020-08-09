@@ -115,23 +115,20 @@ PUB DataRate(Hz): curr_rate | tmp
     writeReg(tmp, 0, 0)
     _measure_mode := CONT
 
-PUB Heater(enabled): result | tmp
+PUB HeaterEnabled(state): curr_state
 ' Enable/Disable built-in heater
 '   Valid values: TRUE (-1 or 1), FALSE (0)
 '   Any other value polls the chip and returns the current setting
 '   NOTE: Per SHT3x datasheet, this is for plausability checking only
-    tmp := 0
-    readReg(core#STATUS, 3, @tmp)
-    tmp >>= 8                                                   ' Chop off CRC
-
-    case ||(enabled)
+    case ||(state)
         0, 1:
-            enabled := lookupz(||(enabled): core#HEATERDIS, core#HEATEREN)
-        OTHER:
-            result := ((tmp >> core#FLD_HEATER) & %1) * TRUE
-            return
-
-    writeReg(enabled, 0, 0)
+            state := lookupz(||(state): core#HEATERDIS, core#HEATEREN)
+            writereg(state, 0, 0)
+        other:
+            curr_state := 0
+            readreg(core#STATUS, 3, @curr_state)
+            curr_state >>= 8                                                   ' Chop off CRC
+            return ((curr_state >> core#FLD_HEATER) & %1) == 1
 
 PUB Humidity{}: rh | tmp[2]
 ' Current Relative Humidity, in hundredths of a percent
