@@ -133,24 +133,20 @@ PUB Humidity(): rh | tmp[2]
 
     return calcRH(_lastrh)
 
-PUB IntRHHiClear(level): curr_level | tmp
+PUB IntRHHiClear(level=-2): curr_lvl
 ' High RH interrupt: clear level, in percent
 '   Valid values: 0..100
 '   Any other value polls the chip and returns the current setting, in hundredths of a percent
-    tmp := 0
-    readReg(core.ALERTLIM_RD_HI_CLR, 3, @tmp)
+    curr_lvl := 0
+    readreg(core#ALERTLIM_RD_HI_CLR, 2, @curr_lvl)
     case level
         0..100:
-            level := rhPct_7bit (level)
-        OTHER:
-            tmp >>= 8                                           ' Chop off CRC
-            curr_level := rh7bit_Pct (tmp)
-            return
+            level := rhpct_7bit (level)
+        other:
+            return rh7bit_pct (curr_lvl)
 
-    tmp >>= 8
-    tmp &= core.MASK_ALERTLIM_RH
-    tmp := (tmp | level)
-    writeReg(core.ALERTLIM_WR_HI_CLR, 2, @tmp)
+    level := (curr_lvl & core#MASK_ALERTLIM_RH) | level
+    writereg(core#ALERTLIM_WR_HI_CLR, 2, @level)
 
 PUB IntRHHiThresh(level): curr_level | tmp, chk
 ' High RH interrupt: trigger level, in percent
