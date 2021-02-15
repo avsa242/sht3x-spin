@@ -89,7 +89,7 @@ PUB Stop{}
 
 PUB ClearStatus{}
 ' Clears the status register
-    writereg(core#CLEARSTATUS, 0, 0)
+    writereg(core#CLRSTATUS, 0, 0)
     time.msleep(1)
 
 PUB DataRate(rate): curr_rate | tmp
@@ -343,7 +343,7 @@ PUB TempScale(scale): curr_scale
 
 PUB SerialNum{}: sn
 ' Return device Serial Number
-    readreg(core#READ_SERIALNUM, 4, @sn)
+    readreg(core#READ_SN, 4, @sn)
 
 PUB Reset{}
 ' Perform Soft Reset
@@ -382,8 +382,8 @@ PRI oneShotMeasure(ptr_buff)
 
     case _repeatability
         LOW, MED, HIGH:
-            readreg(lookupz(_repeatability: core#MEAS_LOWREP,{
-}           core#MEAS_MEDREP, core#MEAS_HIGHREP), 6, ptr_buff)
+            readreg(lookupz(_repeatability: core#MEAS_LOWREP_CS,{
+}           core#MEAS_MEDREP_CS, core#MEAS_HIGHREP_CS), 6, ptr_buff)
         other:
             return
 
@@ -446,14 +446,13 @@ PRI temp9bit_C(temp_9b): tempc | scale
         other:
             return
 
-PRI readReg(reg_nr, nr_bytes, ptr_buff): status | cmd_pkt, tmp, ackbit, delay
+PRI readReg(reg_nr, nr_bytes, ptr_buff): status | cmd_pkt, tmp, ackbit
 ' Read nr_bytes from the slave device into ptr_buff
     delay := 0
     case reg_nr                                 ' Basic register validation
-        core#READ_SERIALNUM:                    ' S/N Read Needs delay before
-            delay := 500                        '   repeated start
-        core#MEAS_HIGHREP..core#MEAS_LOWREP, core#STATUS, core#FETCHDATA,{
-}       core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET,{
+        core#READ_SN:
+        core#MEAS_HIGHREP_CS..core#MEAS_LOWREP_CS, core#STATUS, {
+}       core#FETCHDATA, core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET,{
 }       core#ALERTLIM_RD_LO_SET..core#ALERTLIM_RD_HI_SET:
         other:
             return
@@ -465,30 +464,23 @@ PRI readReg(reg_nr, nr_bytes, ptr_buff): status | cmd_pkt, tmp, ackbit, delay
     i2c.start{}
     i2c.wrblock_lsbf(@cmd_pkt, 3)
 
-    time.usleep(delay)
-
     i2c.start{}
     ackbit := i2c.write(SLAVE_RD | _addr_bit)
-    if ackbit == i2c#NAK                        ' If NAK received from sensor,
-        i2c.stop{}                              '   stop early; no data
-        return NODATA_AVAIL                     '   available.
     i2c.rdblock_msbf(ptr_buff, nr_bytes, i2c#NAK)
     i2c.stop{}
 
-PRI writeReg(reg_nr, nr_bytes, ptr_buff) | cmd_pkt, tmp, chk, delay
+PRI writeReg(reg_nr, nr_bytes, ptr_buff) | cmd_pkt, tmp, chk
 ' Write nr_bytes to the slave device from ptr_buff
     delay := chk := 0
     case reg_nr
-        core#CLEARSTATUS, core#HEATEREN, core#HEATERDIS:
+        core#CLRSTATUS, core#HEATEREN, core#HEATERDIS:
         core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET,{
 }       core#ALERTLIM_RD_LO_SET..core#ALERTLIM_RD_HI_SET:
             chk := crc.sensirioncrc8(ptr_buff, 2)' Interrupt threshold writes require
             swap(ptr_buff)                      '   CRC byte after thresholds
             byte[ptr_buff][2] := chk
         core#MEAS_HIGHREP..core#MEAS_LOWREP:
-            delay := 20                         ' Post-write delay
         core#SOFTRESET:
-            delay := 10
         other:
             return
 
