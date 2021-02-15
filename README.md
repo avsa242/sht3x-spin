@@ -1,7 +1,7 @@
 # sht3x-spin
 ------------
 
-This is a P8X32A/Propeller, P2X8C4M64P/Propeller 2 driver object for Sensirion's SHT3x (30, 31, 35) line of combination temperature and relative humidity sensors.
+This is a P8X32A/Propeller, P2X8C4M64P/Propeller 2 driver object for the Sensirion SHT3x (30, 31, 35) combination temperature and relative humidity sensors.
 
 **IMPORTANT**: This software is meant to be used with the [spin-standard-library](https://github.com/avsa242/spin-standard-library) (P8X32A) or [p2-spin-standard-library](https://github.com/avsa242/p2-spin-standard-library) (P2X8C4M64P). Please install the applicable library first before attempting to use this code, otherwise you will be missing several files required to build the project.
 
@@ -9,11 +9,12 @@ This is a P8X32A/Propeller, P2X8C4M64P/Propeller 2 driver object for Sensirion's
 
 * I2C connection up to 1MHz
 * Measurement in one-shot (with clock-stretching) or continuous modes
-* Supports all three measurement repeatability modes
-* Supports toggling the on-chip heating element
-* Supports reading the sensor's serial number
+* Supports all three measurement repeatability modes and five data rates
+* On-chip heating element operation
+* Reading the sensor's serial number
 * Supports alternate slave address
-* Supports settings alert thresholds
+* Set interrupt thresholds
+* Optional reset pin
 
 ## Requirements
 
@@ -41,4 +42,4 @@ P2/SPIN2:
 - [x] Support alternate slave address
 - [ ] Calculate thresholds based on currently set TempScale()
 - [ ] Add an interrupt-oriented demo app
-- [ ] Support runtime switchable CRC-checking of received data
+- [x] Verify CRC of sensor data

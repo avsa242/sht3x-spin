@@ -23,6 +23,7 @@ CON
     SDA_PIN         = 29
     ADDR_BIT        = 0                         ' 0, 1: opt. slave address
     I2C_HZ          = 1_000_000                 ' max is 1_000_000
+    RESET_PIN       = -1                        ' optional
 ' --
 
 ' Temperature scale
@@ -88,7 +89,7 @@ PUB Setup{}
     ser.clear{}
     ser.strln(string("Serial terminal started"))
 
-    if sht3x.startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT)
+    if sht3x.startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT, RESET_PIN)
         ser.strln(string("SHT3x driver started"))
     else
         ser.strln(string("SHT3x driver failed to start - halting"))

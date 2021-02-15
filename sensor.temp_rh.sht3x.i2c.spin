@@ -41,6 +41,7 @@ CON
 
 VAR
 
+    long _reset_pin
     word _lasttemp, _lastrh
     byte _temp_scale
     byte _repeatability
@@ -60,10 +61,11 @@ PUB Null{}
 
 PUB Start{}: status
 ' Start using "standard" Propeller I2C pins and 100kHz
-    return startx(DEF_SCL, DEF_SDA, DEF_HZ, 0)
+    return startx(DEF_SCL, DEF_SDA, DEF_HZ, 0, -1)
 
-PUB Startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT): status
+PUB Startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT, RESET_PIN): status
 ' Start using custom I/O settings and I2C bus speed
+'   NOTE: RESET_PIN is optional; choose an invalid value to ignore (e.g., -1)
     if lookdown(SCL_PIN: 0..31) and lookdown(SDA_PIN: 0..31) and {
 }   I2C_HZ =< core#I2C_MAX_FREQ
         if (status := i2c.init(SCL_PIN, SDA_PIN, I2C_HZ))
@@ -75,6 +77,7 @@ PUB Startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT): status
                     _addr_bit := 1 << 1
             if i2c.present(SLAVE_WR | _addr_bit)
                 if serialnum{}
+                    _reset_pin := RESET_PIN
                     reset{}
                     clearstatus{}
                     return status
@@ -336,7 +339,15 @@ PUB Repeatability(level): curr_lvl
 
 PUB Reset{}
 ' Perform Soft Reset
-    writereg(core#SOFTRESET, 0, 0)
+    case _reset_pin
+        0..31:
+            outa[_reset_pin] := 1
+            dira[_reset_pin] := 1
+            outa[_reset_pin] := 0
+            time.usleep(1)
+            outa[_reset_pin] := 1
+        other:
+            writereg(core#SOFTRESET, 0, 0)
     time.usleep(core#T_POR)
 
 PUB SerialNum{}: sn
@@ -375,11 +386,13 @@ PUB TempScale(scale): curr_scale
             return _temp_scale
 
 PRI calcRH(rh_word): rh_cal
-
+' Calculate relative humidity, using RH word
+'   Returns: relative humidity, in hundredths of a percent
     return (100 * (rh_word * 100)) / core#ADC_MAX
 
 PRI calcTemp(temp_word): temp_cal
-
+' Calculate temperature, using temperature word
+'   Returns: temperature, in hundredths of a degree, in chosen scale
     case _temp_scale
         C:
             return ((175 * (temp_word * 100)) / core#ADC_MAX)-(45 * 100)
