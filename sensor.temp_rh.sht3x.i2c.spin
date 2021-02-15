@@ -67,7 +67,7 @@ PUB Startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT): status
     if lookdown(SCL_PIN: 0..31) and lookdown(SDA_PIN: 0..31) and {
 }   I2C_HZ =< core#I2C_MAX_FREQ
         if (status := i2c.init(SCL_PIN, SDA_PIN, I2C_HZ))
-            time.msleep(1)
+            time.msleep(core#T_POR)
             case ADDR_BIT
                 0:
                     _addr_bit := 0
@@ -90,7 +90,7 @@ PUB Stop{}
 PUB ClearStatus{}
 ' Clears the status register
     writereg(core#CLRSTATUS, 0, 0)
-    time.msleep(1)
+    time.msleep(core#T_POR)
 
 PUB DataRate(rate): curr_rate | tmp
 ' Output data rate, in Hz
@@ -348,7 +348,7 @@ PUB SerialNum{}: sn
 PUB Reset{}
 ' Perform Soft Reset
     writereg(core#SOFTRESET, 0, 0)
-    time.msleep(1)
+    time.usleep(core#T_POR)
 
 PUB LastCRCOK{}: flag
 ' Flag indicating CRC of last command was good
@@ -448,7 +448,6 @@ PRI temp9bit_C(temp_9b): tempc | scale
 
 PRI readReg(reg_nr, nr_bytes, ptr_buff): status | cmd_pkt, tmp, ackbit
 ' Read nr_bytes from the slave device into ptr_buff
-    delay := 0
     case reg_nr                                 ' Basic register validation
         core#READ_SN:
         core#MEAS_HIGHREP_CS..core#MEAS_LOWREP_CS, core#STATUS, {
@@ -471,7 +470,7 @@ PRI readReg(reg_nr, nr_bytes, ptr_buff): status | cmd_pkt, tmp, ackbit
 
 PRI writeReg(reg_nr, nr_bytes, ptr_buff) | cmd_pkt, tmp, chk
 ' Write nr_bytes to the slave device from ptr_buff
-    delay := chk := 0
+    chk := 0
     case reg_nr
         core#CLRSTATUS, core#HEATEREN, core#HEATERDIS:
         core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET,{
@@ -494,7 +493,6 @@ PRI writeReg(reg_nr, nr_bytes, ptr_buff) | cmd_pkt, tmp, chk
     if chk                                      ' Interrupt thresholds need CRC byte after
         i2c.wrblock_lsbf(ptr_buff, nr_bytes)
     i2c.stop{}
-    time.msleep(delay)
 
 DAT
 {

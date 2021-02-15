@@ -15,6 +15,8 @@ CON
     SLAVE_ADDR              = $44 << 1
     I2C_MAX_FREQ            = 1_000_000
 
+    T_POR                   = 1_000             ' usec
+
     ADC_MAX                 = 65535
     ADC_MAX_X100            = ADC_MAX * 100
 
