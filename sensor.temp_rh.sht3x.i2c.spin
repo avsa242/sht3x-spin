@@ -67,7 +67,7 @@ PUB Startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT): status
     if lookdown(SCL_PIN: 0..31) and lookdown(SDA_PIN: 0..31) and {
 }   I2C_HZ =< core#I2C_MAX_FREQ
         if (status := i2c.init(SCL_PIN, SDA_PIN, I2C_HZ))
-            time.msleep(core#T_POR)
+            time.usleep(core#T_POR)
             case ADDR_BIT
                 0:
                     _addr_bit := 0
@@ -90,7 +90,7 @@ PUB Stop{}
 PUB ClearStatus{}
 ' Clears the status register
     writereg(core#CLRSTATUS, 0, 0)
-    time.msleep(core#T_POR)
+    time.usleep(core#T_POR)
 
 PUB DataRate(rate): curr_rate | tmp
 ' Output data rate, in Hz
@@ -142,19 +142,24 @@ PUB HeaterEnabled(state): curr_state
             curr_state >>= 8                    ' Chop off CRC
             return ((curr_state >> core#HEATER) & 1) == 1
 
-PUB Humidity{}: rh | tmp[2]
+PUB HumData{}: rh_adc
+' Read relative humidity ADC data
+'   Returns: u16
+    rh_adc := 0
+    case _measure_mode
+        SINGLE:
+            oneshotmeasure(@rh_adc)
+        CONT:
+            pollmeasure(@rh_adc)
+
+    _lastrh := rh_adc.word[0]
+    return rh_adc.word[0]
+
+PUB Humidity{}: rh
 ' Current Relative Humidity, in hundredths of a percent
 '   Returns: Integer
 '   (e.g., 4762 is equivalent to 47.62%)
-    case _measure_mode
-        SINGLE:
-            oneshotmeasure(@tmp)
-        CONT:
-            pollmeasure(@tmp)
-
-    _lastrh := (tmp.byte[2] << 8) | tmp.byte[1]
-
-    return calcrh(_lastrh)
+    return calcrh(humdata{})
 
 PUB IntRHHiClear(level): curr_lvl
 ' High RH interrupt: clear level, in percent
@@ -276,6 +281,20 @@ PUB IntTempLoThresh(level): curr_lvl
     level := (curr_lvl & core#ALERTLIM_TEMP_MASK) | level
     writereg(core#ALERTLIM_WR_LO_SET, 2, @level)
 
+PUB LastCMDOK{}: flag
+' Flag indicating last command executed without error
+'   Returns: TRUE (-1) if no error, FALSE (0) otherwise
+    flag := 0
+    readreg(core#STATUS, 2, @flag)
+    return (((flag >> 1) & 1) == 0)
+
+PUB LastCRCOK{}: flag
+' Flag indicating CRC of last command was good
+'   Returns: TRUE (-1) if CRC was good, FALSE (0) otherwise
+    flag := 0
+    readreg(core#STATUS, 2, @flag)
+    return ((flag & 1) == 0)
+
 PUB LastHumidity{}: rh
 ' Previous Relative Humidity measurement, in hundredths of a percent
 '   Returns: Integer
@@ -315,19 +334,33 @@ PUB Repeatability(level): curr_lvl
         other:
             return _repeatability
 
-PUB Temperature{}: temp | tmp[2]
+PUB Reset{}
+' Perform Soft Reset
+    writereg(core#SOFTRESET, 0, 0)
+    time.usleep(core#T_POR)
+
+PUB SerialNum{}: sn
+' Return device Serial Number
+    readreg(core#READ_SN, 4, @sn)
+
+PUB TempData{}: temp_adc
+' Read temperature ADC data
+'   Returns: s16
+    temp_adc := 0
+    case _measure_mode
+        SINGLE:
+            oneshotmeasure(@temp_adc)
+        CONT:
+            pollmeasure(@temp_adc)
+
+    _lasttemp := temp_adc.word[1]
+    return temp_adc.word[1]
+
+PUB Temperature{}: temp
 ' Current Temperature, in hundredths of a degree
 '   Returns: Integer
 '   (e.g., 2105 is equivalent to 21.05 deg C)
-    case _measure_mode
-        SINGLE:
-            oneshotmeasure(@tmp)
-        CONT:
-            pollmeasure(@tmp)
-
-    _lasttemp := (tmp.byte[5] << 8) | tmp.byte[4]
-
-    return calctemp(_lasttemp)
+    return calctemp(tempdata{})
 
 PUB TempScale(scale): curr_scale
 ' Set temperature scale used by Temperature method
@@ -340,29 +373,6 @@ PUB TempScale(scale): curr_scale
             _temp_scale := scale
         other:
             return _temp_scale
-
-PUB SerialNum{}: sn
-' Return device Serial Number
-    readreg(core#READ_SN, 4, @sn)
-
-PUB Reset{}
-' Perform Soft Reset
-    writereg(core#SOFTRESET, 0, 0)
-    time.usleep(core#T_POR)
-
-PUB LastCRCOK{}: flag
-' Flag indicating CRC of last command was good
-'   Returns: TRUE (-1) if CRC was good, FALSE (0) otherwise
-    flag := 0
-    readreg(core#STATUS, 2, @flag)
-    return ((flag & 1) == 0)
-
-PUB LastCMDOK{}: flag
-' Flag indicating last command executed without error
-'   Returns: TRUE (-1) if no error, FALSE (0) otherwise
-    flag := 0
-    readreg(core#STATUS, 2, @flag)
-    return (((flag >> 1) & 1) == 0)
 
 PRI calcRH(rh_word): rh_cal
 
@@ -379,7 +389,7 @@ PRI calcTemp(temp_word): temp_cal
             return FALSE
 
 PRI oneShotMeasure(ptr_buff)
-
+' Perform single-shot measurement
     case _repeatability
         LOW, MED, HIGH:
             readreg(lookupz(_repeatability: core#MEAS_LOWREP_CS,{
@@ -388,9 +398,8 @@ PRI oneShotMeasure(ptr_buff)
             return
 
 PRI pollMeasure(ptr_buff)
-
-    if readreg(core#FETCHDATA, 6, ptr_buff) == NODATA_AVAIL
-        return
+' Poll for measurement when sensor is in continuous measurement mode
+    readreg(core#FETCHDATA, 6, ptr_buff)
 
 PRI rhPct_7bit(rh_pct): rh7bit
 ' Converts Percent RH to 7-bit value, for use with alert threshold setting
@@ -446,40 +455,67 @@ PRI temp9bit_C(temp_9b): tempc | scale
         other:
             return
 
-PRI readReg(reg_nr, nr_bytes, ptr_buff): status | cmd_pkt, tmp, ackbit
+PRI readReg(reg_nr, nr_bytes, ptr_buff) | cmd_pkt, r_tmp, t_tmp, crc_r
 ' Read nr_bytes from the slave device into ptr_buff
-    case reg_nr                                 ' Basic register validation
-        core#READ_SN:
-        core#MEAS_HIGHREP_CS..core#MEAS_LOWREP_CS, core#STATUS, {
-}       core#FETCHDATA, core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET,{
+    case reg_nr                                 ' validate register num
+        core#MEAS_HIGHREP_CS..core#MEAS_LOWREP_CS:
+            cmd_pkt.byte[0] := (SLAVE_WR | _addr_bit)
+            cmd_pkt.byte[1] := reg_nr.byte[MSB]
+            cmd_pkt.byte[2] := reg_nr.byte[LSB]
+            r_tmp := t_tmp := 0
+
+            i2c.start{}
+            i2c.wrblock_lsbf(@cmd_pkt, 3)
+
+            i2c.start{}
+            i2c.write(SLAVE_RD | _addr_bit)
+            i2c.rdblock_msbf(@t_tmp, 3, i2c#ACK)
+            i2c.rdblock_msbf(@r_tmp, 3, i2c#NAK)
+            i2c.stop{}
+
+            crc_r := t_tmp.byte[0]              ' crc read with data
+            t_tmp >>= 8                         ' chop it off the data
+            if crc.sensirioncrc8(@t_tmp, 2) == crc_r
+                word[ptr_buff][1] := t_tmp      ' copy temp
+            else
+                return
+
+            crc_r := r_tmp.byte[0]
+            r_tmp >>= 8
+            if crc.sensirioncrc8(@r_tmp, 2) == crc_r
+                word[ptr_buff][0] := r_tmp      ' copy RH
+            else
+                return
+
+        core#READ_SN, core#STATUS, core#FETCHDATA, {
+}       core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET, {
 }       core#ALERTLIM_RD_LO_SET..core#ALERTLIM_RD_HI_SET:
+            cmd_pkt.byte[0] := (SLAVE_WR | _addr_bit)
+            cmd_pkt.byte[1] := reg_nr.byte[MSB]
+            cmd_pkt.byte[2] := reg_nr.byte[LSB]
+
+            i2c.start{}
+            i2c.wrblock_lsbf(@cmd_pkt, 3)
+
+            i2c.start{}
+            i2c.write(SLAVE_RD | _addr_bit)
+            i2c.rdblock_msbf(ptr_buff, nr_bytes, i2c#NAK)
+            i2c.stop{}
+
         other:
             return
-
-    cmd_pkt.byte[0] := (SLAVE_WR | _addr_bit)
-    cmd_pkt.byte[1] := reg_nr.byte[MSB]
-    cmd_pkt.byte[2] := reg_nr.byte[LSB]
-
-    i2c.start{}
-    i2c.wrblock_lsbf(@cmd_pkt, 3)
-
-    i2c.start{}
-    ackbit := i2c.write(SLAVE_RD | _addr_bit)
-    i2c.rdblock_msbf(ptr_buff, nr_bytes, i2c#NAK)
-    i2c.stop{}
 
 PRI writeReg(reg_nr, nr_bytes, ptr_buff) | cmd_pkt, tmp, chk
 ' Write nr_bytes to the slave device from ptr_buff
     chk := 0
     case reg_nr
-        core#CLRSTATUS, core#HEATEREN, core#HEATERDIS:
+        core#MEAS_HIGHREP..core#MEAS_LOWREP, core#CLRSTATUS, core#HEATEREN, {
+}       core#HEATERDIS, core#SOFTRESET:
         core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET,{
 }       core#ALERTLIM_RD_LO_SET..core#ALERTLIM_RD_HI_SET:
             chk := crc.sensirioncrc8(ptr_buff, 2)' Interrupt threshold writes require
             swap(ptr_buff)                      '   CRC byte after thresholds
             byte[ptr_buff][2] := chk
-        core#MEAS_HIGHREP..core#MEAS_LOWREP:
-        core#SOFTRESET:
         other:
             return
 

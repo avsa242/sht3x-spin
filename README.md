@@ -7,13 +7,12 @@ This is a P8X32A/Propeller, P2X8C4M64P/Propeller 2 driver object for Sensirion's
 
 ## Salient Features
 
-* I2C connection up to 1MHz (Propeller 2/spin2 TBD)
-* Supports one-shot (without clock-stretching) measurement mode
+* I2C connection up to 1MHz
+* Measurement in one-shot (with clock-stretching) or continuous modes
 * Supports all three measurement repeatability modes
 * Supports toggling the on-chip heating element
 * Supports reading the sensor's serial number
 * Supports alternate slave address
-* Supports periodic measurement mode
 * Supports settings alert thresholds
 
 ## Requirements
@@ -27,8 +26,8 @@ P2/SPIN2:
 
 ## Compiler Compatibility
 
-* P1/SPIN1: OpenSpin (tested with 1.00.81)
-* P2/SPIN2: FastSpin (tested with 4.2.5-beta)
+* P1/SPIN1: OpenSpin (tested with 1.00.81), FlexSpin (tested with 5.1.0-beta)
+* P2/SPIN2: FlexSpin (tested with 5.1.0-beta)
 * ~~BST~~ (incompatible - no preprocessor)
 * ~~Propeller Tool~~ (incompatible - no preprocessor)
 * ~~PNut~~ (incompatible - no preprocessor)
@@ -40,6 +39,6 @@ P2/SPIN2:
 ## TODO
 - [x] Support alert thresholds
 - [x] Support alternate slave address
-- [ ] Calculate thresholds bsed on currently set TempScale()
+- [ ] Calculate thresholds based on currently set TempScale()
 - [ ] Add an interrupt-oriented demo app
 - [ ] Support runtime switchable CRC-checking of received data
