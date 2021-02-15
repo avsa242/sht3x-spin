@@ -340,7 +340,7 @@ PUB Repeatability(level): curr_lvl
 PUB Reset{}
 ' Perform Soft Reset
     case _reset_pin
-        0..31:
+        0..63:
             outa[_reset_pin] := 1
             dira[_reset_pin] := 1
             outa[_reset_pin] := 0
