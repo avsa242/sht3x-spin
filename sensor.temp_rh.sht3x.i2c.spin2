@@ -89,7 +89,7 @@ PUB ClearStatus()
     writereg(core.CLRSTATUS, 0, 0)
     waitus(core.T_POR)
 
-PUB DataRate(rate): curr_rate | tmp
+PUB DataRate(rate=-2): curr_rate | tmp
 ' Output data rate, in Hz
 '   Valid values: 0_5 (0.5Hz), 1, 2, 4, 10
 '   Any other value returns the current setting
@@ -124,7 +124,7 @@ PUB DataRate(rate): curr_rate | tmp
     writereg(tmp, 0, 0)
     _measure_mode := CONT
 
-PUB HeaterEnabled(state): curr_state
+PUB HeaterEnabled(state=-2): curr_state
 ' Enable/Disable built-in heater
 '   Valid values: TRUE (-1 or 1), FALSE (0)
 '   Any other value polls the chip and returns the current setting
@@ -158,7 +158,7 @@ PUB Humidity(): rh
 '   (e.g., 4762 is equivalent to 47.62%)
     return calcrh(humdata())
 
-PUB IntRHHiClear(level): curr_lvl
+PUB IntRHHiClear(level=-2): curr_lvl
 ' High RH interrupt: clear level, in percent
 '   Valid values: 0..100
 '   Any other value polls the chip and returns the current setting, in hundredths of a percent
@@ -173,7 +173,7 @@ PUB IntRHHiClear(level): curr_lvl
     level := (curr_lvl & core.ALERTLIM_RH_MASK) | level
     writereg(core.ALERTLIM_WR_HI_CLR, 2, @level)
 
-PUB IntRHHiThresh(level): curr_lvl
+PUB IntRHHiThresh(level=-2): curr_lvl
 ' High RH interrupt: trigger level, in percent
 '   Valid values: 0..100
 '   Any other value polls the chip and returns the current setting, in hundredths of a percent
@@ -188,7 +188,7 @@ PUB IntRHHiThresh(level): curr_lvl
     level := (curr_lvl & core.ALERTLIM_RH_MASK) | level
     writereg(core.ALERTLIM_WR_HI_SET, 2, @level)
 
-PUB IntRHLoClear(level): curr_lvl
+PUB IntRHLoClear(level=-2): curr_lvl
 ' Low RH interrupt: clear level, in percent
 '   Valid values: 0..100
 '   Any other value polls the chip and returns the current setting, in hundredths of a percent
@@ -203,7 +203,7 @@ PUB IntRHLoClear(level): curr_lvl
     level := (curr_lvl & core.ALERTLIM_RH_MASK) | level
     writereg(core.ALERTLIM_WR_LO_CLR, 2, @level)
 
-PUB IntRHLoThresh(level): curr_lvl
+PUB IntRHLoThresh(level=-2): curr_lvl
 ' Low RH interrupt: trigger level, in percent
 '   Valid values: 0..100
 '   Any other value polls the chip and returns the current setting, in hundredths of a percent
@@ -218,7 +218,7 @@ PUB IntRHLoThresh(level): curr_lvl
     level := (curr_lvl & core.ALERTLIM_RH_MASK) | level
     writereg(core.ALERTLIM_WR_LO_SET, 2, @level)
 
-PUB IntTempHiClear(level): curr_lvl
+PUB IntTempHiClear(level=-256): curr_lvl
 ' High temperature interrupt: clear level, in degrees C
 '   Valid values: -45..130
 '   Any other value polls the chip and returns the current setting, in hundredths of a degree C
@@ -233,7 +233,7 @@ PUB IntTempHiClear(level): curr_lvl
     level := (curr_lvl & core.ALERTLIM_TEMP_MASK) | level
     writereg(core.ALERTLIM_WR_HI_CLR, 2, @level)
 
-PUB IntTempHiThresh(level): curr_lvl
+PUB IntTempHiThresh(level=-256): curr_lvl
 ' High temperature interrupt: trigger level, in degrees C
 '   Valid values: -45..130
 '   Any other value polls the chip and returns the current setting, in hundredths of a degree C
@@ -248,7 +248,7 @@ PUB IntTempHiThresh(level): curr_lvl
     level := (curr_lvl & core.ALERTLIM_TEMP_MASK) | level
     writereg(core.ALERTLIM_WR_HI_SET, 2, @level)
 
-PUB IntTempLoClear(level): curr_lvl
+PUB IntTempLoClear(level=-256): curr_lvl
 ' Low temperature interrupt: clear level, in degrees C
 '   Valid values: -45..130
 '   Any other value polls the chip and returns the current setting, in hundredths of a degree C
@@ -263,7 +263,7 @@ PUB IntTempLoClear(level): curr_lvl
     level := (curr_lvl & core.ALERTLIM_TEMP_MASK) | level
     writereg(core.ALERTLIM_WR_LO_CLR, 2, @level)
 
-PUB IntTempLoThresh(level): curr_lvl
+PUB IntTempLoThresh(level=-256): curr_lvl
 ' Low temperature interrupt: trigger level, in degrees C
 '   Valid values: -45..130
 '   Any other value polls the chip and returns the current setting, in hundredths of a degree C
@@ -304,7 +304,7 @@ PUB LastTemperature(): temp
 '   (e.g., 2105 is equivalent to 21.05 deg C)
     return calctemp(_lasttemp)
 
-PUB OpMode(mode): curr_mode
+PUB OpMode(mode=-2): curr_mode
 ' Set device operating mode
 '   Valid values
 '      *SINGLE (0): single-shot measurements
@@ -321,7 +321,7 @@ PUB OpMode(mode): curr_mode
 
     _measure_mode := mode
 
-PUB Repeatability(level): curr_lvl
+PUB Repeatability(level=-2): curr_lvl
 ' Set measurement repeatability/stability
 '   Valid values: LOW (0), MED (1), HIGH (2)
 '   Any other value returns the current setting
@@ -367,7 +367,7 @@ PUB Temperature(): temp
 '   (e.g., 2105 is equivalent to 21.05 deg C)
     return calctemp(tempdata())
 
-PUB TempScale(scale): curr_scale
+PUB TempScale(scale=-2): curr_scale
 ' Set temperature scale used by Temperature method
 '   Valid values:
 '       C (0): Celsius
