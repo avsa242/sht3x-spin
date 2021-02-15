@@ -3,9 +3,9 @@
     Filename: core.con.sht3x.spin
     Author: Jesse Burt
     Description: Low-level constants
-    Copyright (c) 2021
+    Copyright (c) 2022
     Started Nov 19, 2017
-    Updated Jan 6, 2021
+    Updated Feb 15, 2021
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -51,16 +51,16 @@ CON
 
 ' One-shot measurement commands (with clock-stretching)
     ART                     = $2B32
-    MEAS_HIGHREP_STRETCH    = $2C06
-    MEAS_MEDREP_STRETCH     = $2C0D
-    MEAS_LOWREP_STRETCH     = $2C10
+    MEAS_HIGHREP_CS         = $2C06
+    MEAS_MEDREP_CS          = $2C0D
+    MEAS_LOWREP_CS          = $2C10
 
-    CLEARSTATUS             = $3041
+    CLRSTATUS               = $3041
     HEATERDIS               = $3066
     HEATEREN                = $306D
     BREAK_STOP              = $3093
     SOFTRESET               = $30A2
-    READ_SERIALNUM          = $3780
+    READ_SN                 = $3780
 
     ALERTLIM_WR_LO_SET      = $6100
     ALERTLIM_WR_LO_CLR      = $610B
@@ -79,8 +79,8 @@ CON
         ALERTLIM_TEMP       = 0
         ALERTLIM_RH_BITS    = %1111111
         ALERTLIM_TEMP_BITS  = %111111111
-        ALERTLIM_RH_MASK    = ALERTLIM_MASK ^ (ALERTLIM_RH << ALERTLIM_RH)
-        ALERTLIM_TEMP_MASK  = ALERTLIM_MASK ^ (ALERTLIM_TEMP << ALERTLIM_TEMP)
+        ALERTLIM_RH_MASK    = (ALERTLIM_RH_BITS << ALERTLIM_RH) ^ ALERTLIM_MASK
+        ALERTLIM_TEMP_MASK  = (ALERTLIM_TEMP_BITS << ALERTLIM_TEMP) ^ ALERTLIM_MASK
 
     STATUS                  = $F32D
     STATUS_MASK             = $AC13

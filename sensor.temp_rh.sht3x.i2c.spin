@@ -2,10 +2,11 @@
     --------------------------------------------
     Filename: sensor.temp_rh.sht3x.i2c.spin
     Author: Jesse Burt
-    Description: Driver for Sensirion SHT3x series Temperature/Relative Humidity sensors
+    Description: Driver for Sensirion SHT3x series
+        Temperature/Relative Humidity sensors
     Copyright (c) 2021
     Started Nov 19, 2017
-    Updated Jan 6, 2021
+    Updated Feb 15, 2021
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -49,75 +50,77 @@ VAR
 
 OBJ
 
-    i2c : "com.i2c"
-    core: "core.con.sht3x"
-    time: "time"
-    crc : "math.crc"
+    i2c : "com.i2c"                             ' PASM I2C engine
+    core: "core.con.sht3x"                      ' hw-specific constants
+    time: "time"                                ' timekeeping methods
+    crc : "math.crc"                            ' crc algorithms
 
 PUB Null{}
 ' This is not a top-level object
 
-PUB Start{}: okay
+PUB Start{}: status
 ' Start using "standard" Propeller I2C pins and 100kHz
     return startx(DEF_SCL, DEF_SDA, DEF_HZ, 0)
 
-PUB Startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT): okay
-' Start using custom settings
-    if lookdown(SCL_PIN: 0..31) and lookdown(SDA_PIN: 0..31)
-        if I2C_HZ =< core#I2C_MAX_FREQ
-            if okay := i2c.setupx(SCL_PIN, SDA_PIN, I2C_HZ)
-                time.msleep(1)
-                case ADDR_BIT
-                    0:
-                        _addr_bit := 0
-                    other:
-                        _addr_bit := 1 << 1
-                if i2c.present(SLAVE_WR | _addr_bit)
-                    if serialnum{}
-                        reset{}
-                        clearstatus{}
-                        return okay
-
-    return FALSE                                ' something above failed
+PUB Startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT): status
+' Start using custom I/O settings and I2C bus speed
+    if lookdown(SCL_PIN: 0..31) and lookdown(SDA_PIN: 0..31) and {
+}   I2C_HZ =< core#I2C_MAX_FREQ
+        if (status := i2c.init(SCL_PIN, SDA_PIN, I2C_HZ))
+            time.msleep(1)
+            case ADDR_BIT
+                0:
+                    _addr_bit := 0
+                other:
+                    _addr_bit := 1 << 1
+            if i2c.present(SLAVE_WR | _addr_bit)
+                if serialnum{}
+                    reset{}
+                    clearstatus{}
+                    return status
+    ' if this point is reached, something above failed
+    ' Double check I/O pin assignments, connections, power
+    ' Lastly - make sure you have at least one free core/cog
+    return FALSE
 
 PUB Stop{}
 
-    i2c.terminate{}
+    i2c.deinit{}
 
 PUB ClearStatus{}
 ' Clears the status register
     writereg(core#CLEARSTATUS, 0, 0)
     time.msleep(1)
 
-PUB DataRate(Hz): curr_rate | tmp
+PUB DataRate(rate): curr_rate | tmp
 ' Output data rate, in Hz
 '   Valid values: 0_5 (0.5Hz), 1, 2, 4, 10
 '   Any other value returns the current setting
 '   NOTE: Applies to continuous (CONT) OpMode, only
 '   NOTE: Sensirion notes that at the highest measurement rate (10Hz),
 '       self-heating of the sensor might occur
-    case Hz
+    case rate
         0, 5, 0.5:
             ' Measurement rate and repeatability configured in the same reg
             tmp := core#MEAS_PERIODIC_0_5 | lookupz(_repeatability:{
 }           core#RPT_LO_0_5, core#RPT_MED_0_5, core#RPT_HI_0_5)
-            _drate_hz := Hz
+            _drate_hz := rate
         1:
             tmp := core#MEAS_PERIODIC_1 | lookupz(_repeatability:{
 }           core#RPT_LO_1, core#RPT_MED_1, core#RPT_HI_1)
-            _drate_hz := Hz
+            _drate_hz := rate
         2:
             tmp := core#MEAS_PERIODIC_2 | lookupz(_repeatability:{
 }           core#RPT_LO_2, core#RPT_MED_2, core#RPT_HI_2)
-            _drate_hz := Hz
+            _drate_hz := rate
         4:
             tmp := core#MEAS_PERIODIC_4 | lookupz(_repeatability:{
 }           core#RPT_LO_4, core#RPT_MED_4, core#RPT_HI_4)
-            _drate_hz := Hz
+            _drate_hz := rate
         10:
             tmp := core#MEAS_PERIODIC_10 | lookupz(_repeatability:{
 }           core#RPT_LO_10, core#RPT_MED_10, core#RPT_HI_10)
-            _drate_hz := Hz
+            _drate_hz := rate
         other:
             return _drate_hz
     stopcontmeas{}                              ' Stop ongoing measurements
@@ -460,8 +463,7 @@ PRI readReg(reg_nr, nr_bytes, ptr_buff): status | cmd_pkt, tmp, ackbit, delay
     cmd_pkt.byte[2] := reg_nr.byte[LSB]
 
     i2c.start{}
-    repeat tmp from 0 to 2
-        i2c.write(cmd_pkt.byte[tmp])
+    i2c.wrblock_lsbf(@cmd_pkt, 3)
 
     time.usleep(delay)
 
@@ -470,8 +472,7 @@ PRI readReg(reg_nr, nr_bytes, ptr_buff): status | cmd_pkt, tmp, ackbit, delay
     if ackbit == i2c#NAK                        ' If NAK received from sensor,
         i2c.stop{}                              '   stop early; no data
         return NODATA_AVAIL                     '   available.
-    repeat tmp from nr_bytes-1 to 0
-        byte[ptr_buff][tmp] := i2c.read(tmp == 0)
+    i2c.rdblock_msbf(ptr_buff, nr_bytes, i2c#NAK)
     i2c.stop{}
 
 PRI writeReg(reg_nr, nr_bytes, ptr_buff) | cmd_pkt, tmp, chk, delay
@@ -496,12 +497,10 @@ PRI writeReg(reg_nr, nr_bytes, ptr_buff) | cmd_pkt, tmp, chk, delay
     cmd_pkt.byte[2] := reg_nr.byte[LSB]
 
     i2c.start{}
-    repeat tmp from 0 to 2
-        i2c.write(cmd_pkt.byte[tmp])
+    i2c.wrblock_lsbf(@cmd_pkt, 3)
 
     if chk                                      ' Interrupt thresholds need CRC byte after
-        repeat tmp from 0 to nr_bytes
-            i2c.write(byte[ptr_buff][tmp])
+        i2c.wrblock_lsbf(ptr_buff, nr_bytes)
     i2c.stop{}
     time.msleep(delay)
 
