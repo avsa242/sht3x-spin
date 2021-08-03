@@ -391,7 +391,7 @@ PUB TempScale(scale): curr_scale
             return _temp_scale
 
 PUB TempWord2Deg(temp_word): temp
-' Convert thermocouple ADC word to temperature
+' Convert temperature ADC word to temperature
 '   Returns: temperature, in hundredths of a degree, in chosen scale
     case _temp_scale
         C:
