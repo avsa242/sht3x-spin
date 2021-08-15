@@ -5,10 +5,13 @@
     Description: Demo of the SHT3x driver
     Copyright (c) 2021
     Started Mar 10, 2018
-    Updated Jan 6, 2021
+    Updated Aug 15, 2021
     See end of file for terms of use.
     --------------------------------------------
 }
+' Uncomment one of the below to choose the SPIN or PASM I2C engine
+#define SHT3X_SPIN
+'#define SHT3X_PASM
 
 CON
 
@@ -89,8 +92,13 @@ PUB Setup{}
     ser.clear{}
     ser.strln(string("Serial terminal started"))
 
+#ifdef SHT3X_SPIN
+    if sht3x.startx(SCL_PIN, SDA_PIN, ADDR_BIT, RESET_PIN)
+        ser.strln(string("SHT3x driver started (I2C-SPIN)"))
+#elseifdef SHT3X_PASM
     if sht3x.startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT, RESET_PIN)
-        ser.strln(string("SHT3x driver started"))
+        ser.strln(string("SHT3x driver started (I2C-PASM)"))
+#endif
     else
         ser.strln(string("SHT3x driver failed to start - halting"))
         repeat

@@ -6,7 +6,7 @@
         Temperature/Relative Humidity sensors
     Copyright (c) 2021
     Started Nov 19, 2017
-    Updated Aug 1, 2021
+    Updated Aug 15, 2021
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -51,7 +51,13 @@ VAR
 
 OBJ
 
-    i2c : "com.i2c"                             ' PASM I2C engine
+#ifdef SHT3X_SPIN
+    i2c : "tiny.com.i2c"                        ' SPIN I2C engine (~30kHz)
+#elseifdef SHT3X_PASM
+    i2c : "com.i2c"                             ' PASM I2C engine (~800kHz)
+#else
+#error "One of SHT3X_SPIN or SHT3X_PASM must be defined"
+#endif
     core: "core.con.sht3x"                      ' hw-specific constants
     time: "time"                                ' timekeeping methods
     crc : "math.crc"                            ' crc algorithms
@@ -61,14 +67,26 @@ PUB Null{}
 
 PUB Start{}: status
 ' Start using "standard" Propeller I2C pins and 100kHz
+#ifdef SHT3X_SPIN
+    return startx(DEF_SCL, DEF_SDA, 0, -1)
+#elseifdef SHT3X_PASM
     return startx(DEF_SCL, DEF_SDA, DEF_HZ, 0, -1)
+#endif
 
+#ifdef SHT3X_SPIN
+PUB Startx(SCL_PIN, SDA_PIN, ADDR_BIT, RESET_PIN): status
+' Start using custom I/O settings and I2C bus speed
+'   NOTE: RESET_PIN is optional; choose an invalid value to ignore (e.g., -1)
+    if lookdown(SCL_PIN: 0..31) and lookdown(SDA_PIN: 0..31)
+        if (status := i2c.init(SCL_PIN, SDA_PIN))
+#elseifdef SHT3X_PASM
 PUB Startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT, RESET_PIN): status
 ' Start using custom I/O settings and I2C bus speed
 '   NOTE: RESET_PIN is optional; choose an invalid value to ignore (e.g., -1)
     if lookdown(SCL_PIN: 0..31) and lookdown(SDA_PIN: 0..31) and {
 }   I2C_HZ =< core#I2C_MAX_FREQ                 ' validate I/O pins
         if (status := i2c.init(SCL_PIN, SDA_PIN, I2C_HZ))
+#endif
             time.usleep(core#T_POR)             ' wait for device startup
             case ADDR_BIT
                 0:
@@ -340,7 +358,7 @@ PUB Repeatability(level): curr_lvl
 PUB Reset{}
 ' Perform Soft Reset
     case _reset_pin
-        0..63:
+        0..31:
             outa[_reset_pin] := 1
             dira[_reset_pin] := 1
             outa[_reset_pin] := 0
