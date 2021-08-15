@@ -67,26 +67,14 @@ PUB Null{}
 
 PUB Start{}: status
 ' Start using "standard" Propeller I2C pins and 100kHz
-#ifdef SHT3X_SPIN
-    return startx(DEF_SCL, DEF_SDA, 0, -1)
-#elseifdef SHT3X_PASM
     return startx(DEF_SCL, DEF_SDA, DEF_HZ, 0, -1)
-#endif
 
-#ifdef SHT3X_SPIN
-PUB Startx(SCL_PIN, SDA_PIN, ADDR_BIT, RESET_PIN): status
-' Start using custom I/O settings and I2C bus speed
-'   NOTE: RESET_PIN is optional; choose an invalid value to ignore (e.g., -1)
-    if lookdown(SCL_PIN: 0..31) and lookdown(SDA_PIN: 0..31)
-        if (status := i2c.init(SCL_PIN, SDA_PIN))
-#elseifdef SHT3X_PASM
 PUB Startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT, RESET_PIN): status
 ' Start using custom I/O settings and I2C bus speed
 '   NOTE: RESET_PIN is optional; choose an invalid value to ignore (e.g., -1)
     if lookdown(SCL_PIN: 0..31) and lookdown(SDA_PIN: 0..31) and {
 }   I2C_HZ =< core#I2C_MAX_FREQ                 ' validate I/O pins
         if (status := i2c.init(SCL_PIN, SDA_PIN, I2C_HZ))
-#endif
             time.usleep(core#T_POR)             ' wait for device startup
             case ADDR_BIT
                 0:

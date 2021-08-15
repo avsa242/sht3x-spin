@@ -92,11 +92,10 @@ PUB Setup{}
     ser.clear{}
     ser.strln(string("Serial terminal started"))
 
+    if sht3x.startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT, RESET_PIN)
 #ifdef SHT3X_SPIN
-    if sht3x.startx(SCL_PIN, SDA_PIN, ADDR_BIT, RESET_PIN)
         ser.strln(string("SHT3x driver started (I2C-SPIN)"))
 #elseifdef SHT3X_PASM
-    if sht3x.startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT, RESET_PIN)
         ser.strln(string("SHT3x driver started (I2C-PASM)"))
 #endif
     else
