@@ -7,7 +7,7 @@
         (P2 version)
     Copyright (c) 2022
     Started Nov 3, 2019
-    Updated Jan 7, 2022
+    Updated Jan 8, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -22,8 +22,6 @@ CON
 
     MSB             = 1
     LSB             = 0
-
-    NODATA_AVAIL    = $E000_0000
 
 ' Measurement repeatability
     LOW             = 0
@@ -99,23 +97,23 @@ PUB DataRate(rate=-2): curr_rate | tmp
     case rate
         0, 5, 0.5:
             ' Measurement rate and repeatability configured in the same reg
-            tmp := core.MEAS_PERIODIC_0_5 | lookupz(_repeatability:{
+            tmp := core.MEAS_PER_0_5 | lookupz(_repeatability:{
 }           core.RPT_LO_0_5, core.RPT_MED_0_5, core.RPT_HI_0_5)
             _drate_hz := rate
         1:
-            tmp := core.MEAS_PERIODIC_1 | lookupz(_repeatability:{
+            tmp := core.MEAS_PER_1 | lookupz(_repeatability:{
 }           core.RPT_LO_1, core.RPT_MED_1, core.RPT_HI_1)
             _drate_hz := rate
         2:
-            tmp := core.MEAS_PERIODIC_2 | lookupz(_repeatability:{
+            tmp := core.MEAS_PER_2 | lookupz(_repeatability:{
 }           core.RPT_LO_2, core.RPT_MED_2, core.RPT_HI_2)
             _drate_hz := rate
         4:
-            tmp := core.MEAS_PERIODIC_4 | lookupz(_repeatability:{
+            tmp := core.MEAS_PER_4 | lookupz(_repeatability:{
 }           core.RPT_LO_4, core.RPT_MED_4, core.RPT_HI_4)
             _drate_hz := rate
         10:
-            tmp := core.MEAS_PERIODIC_10 | lookupz(_repeatability:{
+            tmp := core.MEAS_PER_10 | lookupz(_repeatability:{
 }           core.RPT_LO_10, core.RPT_MED_10, core.RPT_HI_10)
             _drate_hz := rate
         other:
@@ -139,18 +137,21 @@ PUB HeaterEnabled(state=-2): curr_state
             curr_state >>= 8                    ' Chop off CRC
             return ((curr_state >> core.HEATER) & 1) == 1
 
-PUB HumData(): rh_adc
+PUB HumData(): rh_adc | tmp[2]
 ' Read relative humidity ADC data
 '   Returns: u16
-    rh_adc := 0
+    tmp := 0
     case _measure_mode
         SINGLE:
-            oneshotmeasure(@rh_adc)
+            oneshotmeasure(@tmp)
+            _lasttemp := tmp.word[1]
+            _lastrh := tmp.word[0]
         CONT:
-            pollmeasure(@rh_adc)
-
-    _lastrh := rh_adc.word[0]
-    return rh_adc.word[0]
+            pollmeasure(@tmp)
+            ' update last temp and RH measurement vars
+            _lasttemp := (tmp.byte[5] << 8) | tmp.byte[4]
+            _lastrh := (tmp.byte[2] << 8) | tmp.byte[1]
+    return _lastrh
 
 PUB Humidity(): rh
 ' Current Relative Humidity, in hundredths of a percent
@@ -353,18 +354,22 @@ PUB SerialNum(): sn
 ' Return device Serial Number
     readreg(core.READ_SN, 4, @sn)
 
-PUB TempData(): temp_adc
+PUB TempData(): temp_adc | tmp[2]
 ' Read temperature ADC data
 '   Returns: s16
-    temp_adc := 0
+    tmp := 0
     case _measure_mode
         SINGLE:
-            oneshotmeasure(@temp_adc)
+            oneshotmeasure(@tmp)
+            _lasttemp := tmp.word[1]
+            _lastrh := tmp.word[0]
         CONT:
-            pollmeasure(@temp_adc)
+            pollmeasure(@tmp)
+            ' update last temp and RH measurement vars
+            _lasttemp := (tmp.byte[5] << 8) | tmp.byte[4]
+            _lastrh := (tmp.byte[2] << 8) | tmp.byte[1]
 
-    _lasttemp := temp_adc.word[1]
-    return temp_adc.word[1]
+    return _lasttemp
 
 PUB Temperature(): temp
 ' Current Temperature, in hundredths of a degree
@@ -517,7 +522,13 @@ PRI writeReg(reg_nr, nr_bytes, ptr_buff) | cmd_pkt, chk
     chk := 0
     case reg_nr
         core.MEAS_HIGHREP..core.MEAS_LOWREP, core.CLRSTATUS, core.HEATEREN, {
-}       core.HEATERDIS, core.SOFTRESET:
+}       core.HEATERDIS, core.SOFTRESET, core.BREAK_STOP, {
+}       core.MEAS_P_HI_0_5, core.MEAS_P_MED_0_5, core.MEAS_P_LO_0_5, {
+}       core.MEAS_P_HI_1, core.MEAS_P_MED_1, core.MEAS_P_LO_1, {
+}       core.MEAS_P_HI_2, core.MEAS_P_MED_2, core.MEAS_P_LO_2, {
+}       core.MEAS_P_HI_4, core.MEAS_P_MED_4, core.MEAS_P_LO_4, {
+}       core.MEAS_P_HI_10, core.MEAS_P_MED_10, core.MEAS_P_LO_10:
+
         core.ALERTLIM_WR_LO_SET..core.ALERTLIM_WR_HI_SET,{
 }       core.ALERTLIM_RD_LO_SET..core.ALERTLIM_RD_HI_SET:
             ' calc CRC for interrupt threshold set command (required)
