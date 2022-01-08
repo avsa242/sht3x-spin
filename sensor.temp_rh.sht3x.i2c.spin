@@ -4,9 +4,9 @@
     Author: Jesse Burt
     Description: Driver for Sensirion SHT3x series
         Temperature/Relative Humidity sensors
-    Copyright (c) 2021
+    Copyright (c) 2022
     Started Nov 19, 2017
-    Updated Aug 15, 2021
+    Updated Jan 7, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -524,7 +524,7 @@ PRI readReg(reg_nr, nr_bytes, ptr_buff) | cmd_pkt, r_tmp, t_tmp, crc_r
         other:
             return
 
-PRI writeReg(reg_nr, nr_bytes, ptr_buff) | cmd_pkt, tmp, chk
+PRI writeReg(reg_nr, nr_bytes, ptr_buff) | cmd_pkt, chk
 ' Write nr_bytes to the slave device from ptr_buff
     chk := 0
     case reg_nr
@@ -532,9 +532,8 @@ PRI writeReg(reg_nr, nr_bytes, ptr_buff) | cmd_pkt, tmp, chk
 }       core#HEATERDIS, core#SOFTRESET:
         core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET,{
 }       core#ALERTLIM_RD_LO_SET..core#ALERTLIM_RD_HI_SET:
-            chk := crc.sensirioncrc8(ptr_buff, 2)' Interrupt threshold writes require
-            swap(ptr_buff)                      '   CRC byte after thresholds
-            byte[ptr_buff][2] := chk
+            ' calc CRC for interrupt threshold set command (required)
+            chk := crc.sensirioncrc8(ptr_buff, 2)
         other:
             return
 
@@ -545,9 +544,11 @@ PRI writeReg(reg_nr, nr_bytes, ptr_buff) | cmd_pkt, tmp, chk
     i2c.start{}
     i2c.wrblock_lsbf(@cmd_pkt, 3)
 
-    if chk                                      ' Interrupt thresholds need CRC byte after
-        i2c.wrblock_lsbf(ptr_buff, nr_bytes)
+    if chk                                      ' write params and CRC
+        i2c.wrblock_msbf(ptr_buff, nr_bytes)
+        i2c.write(chk)
     i2c.stop{}
+    time.usleep(500)
 
 DAT
 {
