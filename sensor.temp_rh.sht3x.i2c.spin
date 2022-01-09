@@ -6,7 +6,7 @@
         Temperature/Relative Humidity sensors
     Copyright (c) 2022
     Started Nov 19, 2017
-    Updated Jan 8, 2022
+    Updated Jan 9, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -271,7 +271,7 @@ PUB IntTempLoClear(level): curr_lvl
         -45..130:
             level := tempc_9bit(level)
         other:
-            return temp9bit_c(curr_lvl)
+            return temp9bit_c(curr_lvl & $1ff)
 
     level := (curr_lvl & core#ALERTLIM_TEMP_MASK) | level
     writereg(core#ALERTLIM_WR_LO_CLR, 2, @level)
@@ -468,8 +468,8 @@ PRI tempC_9bit(temp_c): temp9b | scale
 
 PRI temp9bit_C(temp_9b): tempc | scale
 ' Converts raw 9-bit value to temperature in degrees C
-'   Returns: hundredths of a degree C (0..511 ror -4500..12966 or -45.00C 129.66C)
 '   Valid values: 0..511
+'   Returns: hundredths of a degree C -4500..12966 (-45.00C..129.66C)
 '   Any other value is ignored
     scale := 100
     case temp_9b
