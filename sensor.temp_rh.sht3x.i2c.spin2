@@ -436,13 +436,6 @@ PRI stopContMeas()
 ' Stop continuous measurement mode
     writereg(core.BREAK_STOP, 0, 0)
 
-PRI swap(word_addr)
-' Swap byte order of a WORD
-    byte[word_addr][2] := byte[word_addr][0]
-    byte[word_addr][0] := byte[word_addr][1]
-    byte[word_addr][1] := byte[word_addr][2]
-    byte[word_addr][2] := 0
-
 PRI tempC_9bit(temp_c): temp9b | scale
 ' Converts degrees C to 9-bit value, for use with alert threshold settings
 '   Valid values: -45..130
