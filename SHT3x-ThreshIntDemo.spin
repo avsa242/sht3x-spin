@@ -50,7 +50,7 @@ PUB Main{} | dr
 
     setup{}
 
-    dr := 0                                     ' data rate: 0 (0.5), 1, 2, 4, 10Hz
+    dr := 2                                     ' data rate: 0 (0.5), 1, 2, 4, 10Hz
     sht3x.repeatability(0)
     sht3x.datarate(dr)
     sht3x.opmode(sht3x#CONT)
