@@ -6,7 +6,7 @@
         Threshold interrupt functionality
     Copyright (c) 2022
     Started Jan 8, 2022
-    Updated Jan 9, 2022
+    Updated Feb 3, 2022
     See end of file for terms of use.
     --------------------------------------------
 }

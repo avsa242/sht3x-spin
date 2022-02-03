@@ -3,15 +3,12 @@
     Filename: SHT3x-Demo.spin
     Author: Jesse Burt
     Description: Demo of the SHT3x driver
-    Copyright (c) 2021
+    Copyright (c) 2022
     Started Mar 10, 2018
-    Updated Aug 15, 2021
+    Updated Feb 3, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
-' Uncomment one of the below to choose the SPIN or PASM I2C engine
-#define SHT3X_SPIN
-'#define SHT3X_PASM
 
 CON
 
