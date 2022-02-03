@@ -9,8 +9,8 @@ P1BAUD=115200
 P2BAUD=2000000
 
 # P1, P2 compilers
-#P1BUILD=openspin
 P1BUILD=flexspin --interp=rom
+#P1BUILD=flexspin
 P2BUILD=flexspin -2
 
 # For P1 only: build using the bytecode or PASM-based I2C engine
@@ -20,35 +20,38 @@ TARGET=SHT3X_PASM
 
 # Paths to spin-standard-library, and p2-spin-standard-library,
 #  if not specified externally
-SPIN1_LIB_PATH=-L ../spin-standard-library/library
-SPIN2_LIB_PATH=-L ../p2-spin-standard-library/library
+SPIN1_LIB_PATH=~/spin-standard-library/library
+SPIN2_LIB_PATH=~/p2-spin-standard-library/library
 
 
 # -- Internal --
-SPIN1_DRIVER_FN=sensor.temp_rh.sht3x.spin
-SPIN2_DRIVER_FN=sensor.temp_rh.sht3x.spin2
-CORE_FN=core.con.sht3x.spin
+SPIN1_DRIVER_FN=$(SPIN1_LIB_PATH)/sensor.temp_rh.sht3x.spin
+SPIN2_DRIVER_FN=$(SPIN2_LIB_PATH)/sensor.temp_rh.sht3x.spin2
+SPIN1_CORE_FN=$(SPIN1_LIB_PATH)/core.con.sht3x.spin
+SPIN2_CORE_FN=$(SPIN2_LIB_PATH)/core.con.sht3x.spin
 # --
 
 # Build all targets (build only)
-all: SHT3x-Demo.binary SHT3x-Demo.bin2
+all: SHT3x-Demo.binary SHT3x-Demo.bin2 SHT3x-ThreshIntDemo.binary SHT3x-ThreshIntDemo.bin2
 
 # Load P1 or P2 target (will build first, if necessary)
 p1demo: loadp1demo
 p2demo: loadp2demo
+p1intdemo: loadp1intdemo
+p2intdemo: loadp2intdemo
 
 # Build binaries
-SHT3x-Demo.binary: SHT3x-Demo.spin $(SPIN1_DRIVER_FN) $(CORE_FN)
-	$(P1BUILD) $(SPIN1_LIB_PATH) -b -D $(TARGET) SHT3x-Demo.spin
+SHT3x-Demo.binary: SHT3x-Demo.spin $(SPIN1_DRIVER_FN) $(SPIN1_CORE_FN)
+	$(P1BUILD) -L $(SPIN1_LIB_PATH) -b -D $(TARGET) SHT3x-Demo.spin
 
-SHT3x-ThreshIntDemo.binary: SHT3x-ThreshIntDemo.spin $(SPIN1_DRIVER_FN) $(CORE_FN)
-	$(P1BUILD) $(SPIN1_LIB_PATH) -b -D $(TARGET) SHT3x-ThreshIntDemo.spin
+SHT3x-ThreshIntDemo.binary: SHT3x-ThreshIntDemo.spin $(SPIN1_DRIVER_FN) $(SPIN1_CORE_FN)
+	$(P1BUILD) -L $(SPIN1_LIB_PATH) -b -D $(TARGET) SHT3x-ThreshIntDemo.spin
 
-SHT3x-Demo.bin2: SHT3x-Demo.spin2 $(SPIN2_DRIVER_FN) $(CORE_FN)
-	$(P2BUILD) $(SPIN2_LIB_PATH) -b -2 -D $(TARGET) -o SHT3x-Demo.bin2 SHT3x-Demo.spin2
+SHT3x-Demo.bin2: SHT3x-Demo.spin2 $(SPIN2_DRIVER_FN) $(SPIN2_CORE_FN)
+	$(P2BUILD) -L $(SPIN2_LIB_PATH) -b -2 -D $(TARGET) -o SHT3x-Demo.bin2 SHT3x-Demo.spin2
 
-SHT3x-ThreshIntDemo.bin2: SHT3x-ThreshIntDemo.spin $(SPIN2_DRIVER_FN) $(CORE_FN)
-	$(P2BUILD) $(SPIN2_LIB_PATH) -b -2 -D $(TARGET) -o SHT3x-ThreshIntDemo.bin2 SHT3x-ThreshIntDemo.spin2
+SHT3x-ThreshIntDemo.bin2: SHT3x-ThreshIntDemo.spin2 $(SPIN2_DRIVER_FN) $(SPIN2_CORE_FN)
+	$(P2BUILD) -L $(SPIN2_LIB_PATH) -b -2 -D $(TARGET) -o SHT3x-ThreshIntDemo.bin2 SHT3x-ThreshIntDemo.spin2
 
 # Load binaries to RAM (will build first, if necessary)
 loadp1demo: SHT3x-Demo.binary
