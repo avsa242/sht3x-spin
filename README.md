@@ -21,9 +21,11 @@ This is a P8X32A/Propeller, P2X8C4M64P/Propeller 2 driver object for the Sensiri
 P1/SPIN1:
 * spin-standard-library
 * 1 extra core/cog for the PASM I2C engine (none if the SPIN I2C engine is used)
+* sensor.temp_rh.common.spinh (source: spin-standard-library)
 
 P2/SPIN2:
 * p2-spin-standard-library
+* sensor.temp_rh.common.spin2h (source: p2-spin-standard-library)
 
 ## Compiler Compatibility
 
