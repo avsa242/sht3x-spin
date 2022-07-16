@@ -7,7 +7,7 @@ This is a P8X32A/Propeller, P2X8C4M64P/Propeller 2 driver object for the Sensiri
 
 ## Salient Features
 
-* I2C connection at ~30kHz (P1: SPIN I2C), up to 1MHz (P1: PASM I2C, P2)
+* I2C connection at ~30kHz (P1: SPIN I2C), up to 1MHz (P1: PASM I2C, P2; max tested speed 840kHz)
 * Measurement in one-shot (with clock-stretching) or continuous modes
 * Supports all three measurement repeatability modes and five data rates
 * On-chip heating element operation
