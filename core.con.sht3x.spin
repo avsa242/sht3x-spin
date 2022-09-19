@@ -109,7 +109,7 @@ CON
         CMDSTAT             = 1
         CMDCRC              = 0
 
-PUB Null
+PUB null
 ' This is not a top-level object
 
 DAT
