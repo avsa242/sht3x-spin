@@ -6,7 +6,7 @@
         Temperature/Relative Humidity sensors
     Copyright (c) 2022
     Started Nov 19, 2017
-    Updated May 25, 2022
+    Updated Sep 24, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -461,7 +461,6 @@ PRI readreg(reg_nr, nr_bytes, ptr_buff) | cmd_pkt, r_tmp, t_tmp, crc_r
                 return
 
         core#READ_SN, core#STATUS, core#FETCHDATA, {
-}       core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET, {
 }       core#ALERTLIM_RD_LO_SET..core#ALERTLIM_RD_HI_SET:
             cmd_pkt.byte[0] := (SLAVE_WR | _addr_bit)
             cmd_pkt.byte[1] := reg_nr.byte[MSB]
@@ -490,8 +489,7 @@ PRI writereg(reg_nr, nr_bytes, ptr_buff) | cmd_pkt, chk
 }       core#MEAS_P_HI_4, core#MEAS_P_MED_4, core#MEAS_P_LO_4, {
 }       core#MEAS_P_HI_10, core#MEAS_P_MED_10, core#MEAS_P_LO_10:
 
-        core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET,{
-}       core#ALERTLIM_RD_LO_SET..core#ALERTLIM_RD_HI_SET:
+        core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET:
             ' calc CRC for interrupt threshold set command (required)
             chk := crc.sensirioncrc8(ptr_buff, 2)
         other:
