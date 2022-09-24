@@ -2,8 +2,7 @@
     --------------------------------------------
     Filename: sensor.temp_rh.sht3x.spin
     Author: Jesse Burt
-    Description: Driver for Sensirion SHT3x series
-        Temperature/Relative Humidity sensors
+    Description: Driver for Sensirion SHT3x series Temperature/Relative Humidity sensors
     Copyright (c) 2022
     Started Nov 19, 2017
     Updated Sep 24, 2022
@@ -54,7 +53,7 @@ OBJ
 PUB null{}
 ' This is not a top-level object
 
-PUB Start{}: status
+PUB start{}: status
 ' Start using "standard" Propeller I2C pins and 100kHz
     return startx(DEF_SCL, DEF_SDA, DEF_HZ, 0, -1)
 
@@ -70,11 +69,11 @@ PUB startx(SCL_PIN, SDA_PIN, I2C_HZ, ADDR_BIT, RESET_PIN): status
                     _addr_bit := 0
                 other:
                     _addr_bit := 1 << 1
-            if i2c.present(SLAVE_WR | _addr_bit)' test device bus presence
-                if serialnum{}                  ' check serial num > 0
+            if (i2c.present(SLAVE_WR | _addr_bit))
+                if (serial_num{})               ' check serial num > 0
                     _reset_pin := RESET_PIN
                     reset{}
-                    clearstatus{}
+                    clr_status{}
                     return status
     ' if this point is reached, something above failed
     ' Double check I/O pin assignments, connections, power
@@ -86,20 +85,20 @@ PUB stop{}
     i2c.deinit{}
     bytefill(@_reset_pin, 0, 8)
 
-PUB clearstatus{}
+PUB clr_status{}
 ' Clears the status register
     writereg(core#CLRSTATUS, 0, 0)
     time.usleep(core#T_POR)
 
-PUB datarate(rate): curr_rate | tmp
+PUB data_rate(rate): curr_rate | tmp
 ' Output data rate, in Hz
 '   Valid values: 0_5 (0.5Hz), 1, 2, 4, 10
 '   Any other value returns the current setting
-'   NOTE: Applies to continuous (CONT) OpMode, only
+'   NOTE: Applies when opmode() == CONT (continuous), only
 '   NOTE: Sensirion notes that at the highest measurement rate (10Hz),
 '       self-heating of the sensor might occur
     case rate
-        0, 5, 0.5:
+        0, 5:
             ' Measurement rate and repeatability configured in the same reg
             tmp := core#MEAS_PER_0_5 | lookupz(_repeatability:{
 }           core#RPT_LO_0_5, core#RPT_MED_0_5, core#RPT_HI_0_5)
@@ -122,11 +121,11 @@ PUB datarate(rate): curr_rate | tmp
             _drate_hz := rate
         other:
             return _drate_hz
-    stopcontmeas{}                              ' Stop ongoing measurements
+    stop_cont_meas{}                            ' Stop ongoing measurements
     writereg(tmp, 0, 0)
     _measure_mode := CONT
 
-PUB heaterenabled(state): curr_state
+PUB heater_ena(state): curr_state
 ' Enable/Disable built-in heater
 '   Valid values: TRUE (-1 or 1), FALSE (0)
 '   Any other value polls the chip and returns the current setting
@@ -141,7 +140,7 @@ PUB heaterenabled(state): curr_state
             curr_state >>= 8                    ' Chop off CRC
             return ((curr_state >> core#HEATER) & 1) == 1
 
-PUB intrhhiclear(level): curr_lvl
+PUB rh_int_hi_hyst(level): curr_lvl
 ' High RH interrupt: clear level, in percent
 '   Valid values: 0..100
 '   Any other value polls the chip and returns the current setting, in hundredths of a percent
@@ -156,7 +155,7 @@ PUB intrhhiclear(level): curr_lvl
     level := (curr_lvl & core#ALERTLIM_RH_MASK) | level
     writereg(core#ALERTLIM_WR_HI_CLR, 2, @level)
 
-PUB intrhhithresh(level): curr_lvl
+PUB rh_int_hi_thresh(level): curr_lvl
 ' High RH interrupt: trigger level, in percent
 '   Valid values: 0..100
 '   Any other value polls the chip and returns the current setting, in hundredths of a percent
@@ -171,7 +170,7 @@ PUB intrhhithresh(level): curr_lvl
     level := (curr_lvl & core#ALERTLIM_RH_MASK) | level
     writereg(core#ALERTLIM_WR_HI_SET, 2, @level)
 
-PUB intrhloclear(level): curr_lvl
+PUB rh_int_lo_hyst(level): curr_lvl
 ' Low RH interrupt: clear level, in percent
 '   Valid values: 0..100
 '   Any other value polls the chip and returns the current setting, in hundredths of a percent
@@ -186,7 +185,7 @@ PUB intrhloclear(level): curr_lvl
     level := (curr_lvl & core#ALERTLIM_RH_MASK) | level
     writereg(core#ALERTLIM_WR_LO_CLR, 2, @level)
 
-PUB intrhlothresh(level): curr_lvl
+PUB rh_int_lo_thresh(level): curr_lvl
 ' Low RH interrupt: trigger level, in percent
 '   Valid values: 0..100
 '   Any other value polls the chip and returns the current setting, in hundredths of a percent
@@ -201,7 +200,7 @@ PUB intrhlothresh(level): curr_lvl
     level := (curr_lvl & core#ALERTLIM_RH_MASK) | level
     writereg(core#ALERTLIM_WR_LO_SET, 2, @level)
 
-PUB inttemphiclear(level): curr_lvl
+PUB temp_int_hi_hyst(level): curr_lvl
 ' High temperature interrupt: clear level, in degrees C
 '   Valid values: -45..130
 '   Any other value polls the chip and returns the current setting, in hundredths of a degree C
@@ -216,7 +215,7 @@ PUB inttemphiclear(level): curr_lvl
     level := (curr_lvl & core#ALERTLIM_TEMP_MASK) | level
     writereg(core#ALERTLIM_WR_HI_CLR, 2, @level)
 
-PUB inttemphithresh(level): curr_lvl
+PUB temp_int_hi_thresh(level): curr_lvl
 ' High temperature interrupt: trigger level, in degrees C
 '   Valid values: -45..130
 '   Any other value polls the chip and returns the current setting, in hundredths of a degree C
@@ -231,7 +230,7 @@ PUB inttemphithresh(level): curr_lvl
     level := (curr_lvl & core#ALERTLIM_TEMP_MASK) | level
     writereg(core#ALERTLIM_WR_HI_SET, 2, @level)
 
-PUB inttemploclear(level): curr_lvl
+PUB temp_int_lo_hyst(level): curr_lvl
 ' Low temperature interrupt: clear level, in degrees C
 '   Valid values: -45..130
 '   Any other value polls the chip and returns the current setting, in hundredths of a degree C
@@ -246,7 +245,7 @@ PUB inttemploclear(level): curr_lvl
     level := (curr_lvl & core#ALERTLIM_TEMP_MASK) | level
     writereg(core#ALERTLIM_WR_LO_CLR, 2, @level)
 
-PUB inttemplothresh(level): curr_lvl
+PUB temp_int_lo_thresh(level): curr_lvl
 ' Low temperature interrupt: trigger level, in degrees C
 '   Valid values: -45..130
 '   Any other value polls the chip and returns the current setting, in hundredths of a degree C
@@ -261,14 +260,14 @@ PUB inttemplothresh(level): curr_lvl
     level := (curr_lvl & core#ALERTLIM_TEMP_MASK) | level
     writereg(core#ALERTLIM_WR_LO_SET, 2, @level)
 
-PUB lastcmdok{}: flag
+PUB last_cmd_ok{}: flag
 ' Flag indicating last command executed without error
 '   Returns: TRUE (-1) if no error, FALSE (0) otherwise
     flag := 0
     readreg(core#STATUS, 2, @flag)
     return (((flag >> 1) & 1) == 0)
 
-PUB lastcrcok{}: flag
+PUB last_crc_ok{}: flag
 ' Flag indicating CRC of last command was good
 '   Returns: TRUE (-1) if CRC was good, FALSE (0) otherwise
     flag := 0
@@ -283,10 +282,10 @@ PUB opmode(mode): curr_mode
 '   Any other value returns the current setting
     case mode
         SINGLE:
-            stopcontmeas{}
+            stop_cont_meas{}
         CONT:
-            stopcontmeas{}
-            datarate(_drate_hz)
+            stop_cont_meas{}
+            data_rate(_drate_hz)
         other:
             return _measure_mode
 
@@ -315,49 +314,49 @@ PUB reset{}
             writereg(core#SOFTRESET, 0, 0)
     time.usleep(core#T_POR)
 
-PUB rhdata{}: rh_adc | tmp[2]
+PUB rh_data{}: rh_adc | tmp[2]
 ' Read relative humidity ADC data
 '   Returns: u16
     tmp := 0
     case _measure_mode
         SINGLE:
-            oneshotmeasure(@tmp)
+            one_shot_meas(@tmp)
             _last_temp := tmp.word[1]
             _last_rh := tmp.word[0]
         CONT:
-            pollmeasure(@tmp)
+            poll_measure(@tmp)
             ' update last temp and RH measurement vars
             _last_temp := (tmp.byte[5] << 8) | tmp.byte[4]
             _last_rh := (tmp.byte[2] << 8) | tmp.byte[1]
     return _last_rh
 
-PUB rhword2pct(rh_word): rh
+PUB rh_word2pct(rh_word): rh
 ' Convert RH ADC word to percent
 '   Returns: relative humidity, in hundredths of a percent
     return (100 * (rh_word * 100)) / core#ADC_MAX
 
-PUB serialnum{}: sn
+PUB serial_num{}: sn
 ' Return device Serial Number
     readreg(core#READ_SN, 4, @sn)
 
-PUB tempdata{}: temp_adc | tmp[2]
+PUB temp_data{}: temp_adc | tmp[2]
 ' Read temperature ADC data
 '   Returns: s16
     tmp := 0
     case _measure_mode
         SINGLE:
-            oneshotmeasure(@tmp)
+            one_shot_meas(@tmp)
             _last_temp := tmp.word[1]
             _last_rh := tmp.word[0]
         CONT:
-            pollmeasure(@tmp)
+            poll_measure(@tmp)
             ' update last temp and RH measurement vars
             _last_temp := (tmp.byte[5] << 8) | tmp.byte[4]
             _last_rh := (tmp.byte[2] << 8) | tmp.byte[1]
 
     return _last_temp
 
-PUB tempword2deg(temp_word): temp
+PUB temp_word2deg(temp_word): temp
 ' Convert temperature ADC word to temperature
 '   Returns: temperature, in hundredths of a degree, in chosen scale
     case _temp_scale
@@ -368,7 +367,7 @@ PUB tempword2deg(temp_word): temp
         other:
             return FALSE
 
-PRI oneshotmeasure(ptr_buff)
+PRI one_shot_meas(ptr_buff)
 ' Perform single-shot measurement
     case _repeatability
         LOW, MED, HIGH:
@@ -377,7 +376,7 @@ PRI oneshotmeasure(ptr_buff)
         other:
             return
 
-PRI pollmeasure(ptr_buff)
+PRI poll_measure(ptr_buff)
 ' Poll for measurement when sensor is in continuous measurement mode
     readreg(core#FETCHDATA, 6, ptr_buff)
 
@@ -400,7 +399,7 @@ PRI rh7bit_pct(rh_7b): rhpct
     rh_7b *= 10000                              ' Scale up
     return rh_7b /= core#ADC_MAX                ' Scale to %
 
-PRI stopcontmeas{}
+PRI stop_cont_meas{}
 ' Stop continuous measurement mode
     writereg(core#BREAK_STOP, 0, 0)
 
