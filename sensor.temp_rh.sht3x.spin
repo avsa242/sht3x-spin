@@ -5,7 +5,7 @@
     Description: Driver for Sensirion SHT3x series Temperature/Relative Humidity sensors
     Copyright (c) 2022
     Started Nov 19, 2017
-    Updated Sep 24, 2022
+    Updated Oct 16, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -447,14 +447,14 @@ PRI readreg(reg_nr, nr_bytes, ptr_buff) | cmd_pkt, r_tmp, t_tmp, crc_r
 
             crc_r := t_tmp.byte[0]              ' crc read with data
             t_tmp >>= 8                         ' chop it off the data
-            if crc.sensirioncrc8(@t_tmp, 2) == crc_r
+            if crc.sensirion_crc8(@t_tmp, 2) == crc_r
                 word[ptr_buff][1] := t_tmp      ' copy temp
             else
                 return
 
             crc_r := r_tmp.byte[0]
             r_tmp >>= 8
-            if crc.sensirioncrc8(@r_tmp, 2) == crc_r
+            if crc.sensirion_crc8(@r_tmp, 2) == crc_r
                 word[ptr_buff][0] := r_tmp      ' copy RH
             else
                 return
@@ -490,7 +490,7 @@ PRI writereg(reg_nr, nr_bytes, ptr_buff) | cmd_pkt, chk
 
         core#ALERTLIM_WR_LO_SET..core#ALERTLIM_WR_HI_SET:
             ' calc CRC for interrupt threshold set command (required)
-            chk := crc.sensirioncrc8(ptr_buff, 2)
+            chk := crc.sensirion_crc8(ptr_buff, 2)
         other:
             return
 
