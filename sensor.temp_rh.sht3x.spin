@@ -154,6 +154,9 @@ PUB last_crc_ok{}: flag
     readreg(core#STATUS, 2, @flag)
     return ((flag & 1) == 0)
 
+PUB measure{}
+' dummy method
+
 PUB opmode(mode): curr_mode
 ' Set device operating mode
 '   Valid values
