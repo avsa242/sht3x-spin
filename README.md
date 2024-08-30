@@ -5,9 +5,10 @@ This is a P8X32A/Propeller, P2X8C4M64P/Propeller 2 driver object for the Sensiri
 
 **IMPORTANT**: This software is meant to be used with the [spin-standard-library](https://github.com/avsa242/spin-standard-library) (P8X32A) or [p2-spin-standard-library](https://github.com/avsa242/p2-spin-standard-library) (P2X8C4M64P). Please install the applicable library first before attempting to use this code, otherwise you will be missing several files required to build the project.
 
+
 ## Salient Features
 
-* I2C connection at ~30kHz (P1: SPIN I2C), up to 1MHz (P1: PASM I2C, P2; max tested speed 840kHz)
+* I2C connection at ~30kHz (P1: bytecode-based I2C engine), up to 1MHz (P1: PASM-based I2C engine, P2: max tested speed 840kHz)
 * Measurement in one-shot (with clock-stretching) or continuous modes
 * Supports all three measurement repeatability modes and five data rates
 * On-chip heating element operation
@@ -16,29 +17,30 @@ This is a P8X32A/Propeller, P2X8C4M64P/Propeller 2 driver object for the Sensiri
 * Set interrupt thresholds
 * Optional reset pin
 
+
 ## Requirements
 
 P1/SPIN1:
 * spin-standard-library
-* 1 extra core/cog for the PASM I2C engine (none if the SPIN I2C engine is used)
-* sensor.temp_rh.common.spinh (source: spin-standard-library)
+* 1 extra core/cog for the PASM I2C engine (none if the bytecode-based I2C engine is used)
+* `sensor.temp_rh.common.spinh` (source: spin-standard-library)
 
 P2/SPIN2:
 * p2-spin-standard-library
-* sensor.temp_rh.common.spin2h (source: p2-spin-standard-library)
+* `sensor.temp_rh.common.spin2h` (source: p2-spin-standard-library)
+
 
 ## Compiler Compatibility
 
-| Processor | Language | Compiler               | Backend     | Status                |
-|-----------|----------|------------------------|-------------|-----------------------|
-| P1        | SPIN1    | FlexSpin (5.9.23-beta) | Bytecode    | OK                    |
-| P1        | SPIN1    | FlexSpin (5.9.23-beta) | Native code | OK                    |
-| P1        | SPIN1    | OpenSpin (1.00.81)     | Bytecode    | Untested (deprecated) |
-| P2        | SPIN2    | FlexSpin (5.9.23-beta) | NuCode      | FTBFS                 |
-| P2        | SPIN2    | FlexSpin (5.9.23-beta) | Native code | OK                    |
-| P1        | SPIN1    | Brad's Spin Tool (any) | Bytecode    | Unsupported           |
-| P1, P2    | SPIN1, 2 | Propeller Tool (any)   | Bytecode    | Unsupported           |
-| P1, P2    | SPIN1, 2 | PNut (any)             | Bytecode    | Unsupported           |
+| Processor | Language | Compiler               | Backend      | Status                |
+|-----------|----------|------------------------|--------------|-----------------------|
+| P1        | SPIN1    | FlexSpin (6.9.4)       | Bytecode     | OK                    |
+| P1        | SPIN1    | FlexSpin (6.9.4)       | Native/PASM  | OK                    |
+| P2        | SPIN2    | FlexSpin (6.9.4)       | NuCode       | Untested              |
+| P2        | SPIN2    | FlexSpin (6.9.4)       | Native/PASM2 | OK                    |
+
+(other versions or toolchains not listed are __not supported__, and _may or may not_ work)
+
 
 ## Limitations
 

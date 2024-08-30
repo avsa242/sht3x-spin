@@ -1,64 +1,67 @@
 {
-    --------------------------------------------
-    Filename: SHT3x-Demo.spin
-    Author: Jesse Burt
-    Description: SHT3x driver demo
+----------------------------------------------------------------------------------------------------
+    Filename:       SHT3x-Demo.spin
+    Description:    Demo of the SHT3x driver
         * Temp/RH data output
-    Copyright (c) 2022
-    Started Mar 10, 2018
-    Updated Oct 16, 2022
-    See end of file for terms of use.
-    --------------------------------------------
-
-    Build-time symbols supported by driver:
-        -DSHT3x_I2C (default if none specified)
-        -DSHT3x_I2C_BC
+    Author:         Jesse Burt
+    Started:        Nov 19, 2017
+    Updated:        Aug 30, 2024
+    Copyright (c) 2024 - See end of file for terms of use.
+----------------------------------------------------------------------------------------------------
 }
+
+' Uncomment the two lines below to use the bytecode-based I2C engine in the driver
+'#define SHT3X_I2C_BC
+'#pragma exportdef(SHT3X_I2C_BC)
+
+
 CON
 
-    _clkmode    = cfg#_clkmode
-    _xinfreq    = cfg#_xinfreq
+    _clkmode    = xtal1+pll16x
+    _xinfreq    = 5_000_000
 
-' -- User-modifiable constants
-    SER_BAUD    = 115_200
-
-    { I2C configuration }
-    SCL_PIN     = 28
-    SDA_PIN     = 29
-    I2C_FREQ    = 1_000_000                     ' max is 1_000_000
-    ADDR_BITS   = 0                             ' 0, 1
-
-    RES_PIN     = -1                            ' optional
-' --
 
 OBJ
 
-    cfg:    "boardcfg.flip"
-    sensor:  "sensor.temp_rh.sht3x"
-    ser:    "com.serial.terminal.ansi"
     time:   "time"
+    ser:    "com.serial.terminal.ansi" | SER_BAUD=115_200
+    sensor: "sensor.temp_rh.sht3x" | SCL=28, SDA=29, I2C_FREQ=400_000, I2C_ADDR=0, RST=24
 
-PUB setup{}
 
-    ser.start(SER_BAUD)
+PUB main() | rh, temp, tscl
+
+    setup()
+
+    sensor.temp_scale(sensor.C)                 ' C, F
+
+    repeat
+        sensor.measure()
+        rh := sensor.rh()
+        temp := sensor.temperature()
+        ser.pos_xy(0, 3)
+        ser.printf2(@"Rel. humidity (%%): %3.3d.%02.2d\n\r", (rh / 100), (rh // 100))
+        tscl := lookupz(sensor.temp_scale(-2): "C", "F", "K")
+        ser.printf3(@"Temp. (deg %c): %3.3d.%02.2d\n\r", tscl, (temp / 100), ||(temp // 100))
+
+
+
+PUB setup()
+
+    ser.start()
     time.msleep(30)
-    ser.clear{}
-    ser.strln(string("Serial terminal started"))
+    ser.clear()
+    ser.strln(@"Serial terminal started")
 
-    if (sensor.startx(SCL_PIN, SDA_PIN, I2C_FREQ, ADDR_BITS, RES_PIN))
-        ser.strln(string("SHT3x driver started"))
+    if ( sensor.start() )
+        ser.strln(@"SHT3x driver started")
     else
-        ser.strln(string("SHT3x driver failed to start - halting"))
+        ser.strln(@"SHT3x driver failed to start - halting")
         repeat
 
-    sensor.temp_scale(sensor#C)
-    demo{}
-
-#include "temp_rhdemo.common.spinh"             ' code common to all temp/RH demos
 
 DAT
 {
-Copyright 2022 Jesse Burt
+Copyright 2024 Jesse Burt
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,

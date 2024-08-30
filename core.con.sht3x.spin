@@ -1,13 +1,12 @@
 {
-    --------------------------------------------
-    Filename: core.con.sht3x.spin
-    Author: Jesse Burt
-    Description: SHT3x-specific constants
-    Copyright (c) 2022
-    Started Nov 19, 2017
-    Updated Jan 8, 2022
-    See end of file for terms of use.
-    --------------------------------------------
+----------------------------------------------------------------------------------------------------
+    Filename:       core.con.sht3x.spin
+    Description:    SHT3x-specific constants
+    Author:         Jesse Burt
+    Started:        Nov 19, 2017
+    Updated:        Aug 30, 2024
+    Copyright (c) 2024 - See end of file for terms of use.
+----------------------------------------------------------------------------------------------------
 }
 
 CON
@@ -109,13 +108,14 @@ CON
         CMDSTAT             = 1
         CMDCRC              = 0
 
-PUB null
+
+PUB null()
 ' This is not a top-level object
 
-DAT
 
+DAT
 {
-Copyright 2022 Jesse Burt
+Copyright 2024 Jesse Burt
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
