@@ -5,7 +5,7 @@
         * Threshold interrupt functionality
     Author:         Jesse Burt
     Started:        Nov 19, 2017
-    Updated:        Aug 29, 2024
+    Updated:        Nov 13, 2024
     Copyright (c) 2024 - See end of file for terms of use.
 ----------------------------------------------------------------------------------------------------
 }
@@ -39,15 +39,15 @@ PUB main() | dr, temp, rh
     dr := 2                                     ' data rate: 0 (0.5), 1, 2, 4, 10Hz
 
     sensor.temp_scale(sensor.C)                 ' C, F
-    sensor.rh_int_hi_thresh(25)                 ' RH hi/lo thresholds
-    sensor.rh_int_lo_thresh(5)
-    sensor.rh_int_hi_hyst(24)                   ' hi/lo thresh hysteresis
-    sensor.rh_int_lo_hyst(6)
+    sensor.rh_int_hi_thresh(25_00)              ' RH hi/lo thresholds
+    sensor.rh_int_lo_thresh(5_00)
+    sensor.rh_int_hi_hyst(24_00)                ' hi/lo thresh hysteresis
+    sensor.rh_int_lo_hyst(6_00)
 
-    sensor.temp_int_hi_thresh(30)               ' temp hi/lo thresholds
-    sensor.temp_int_lo_thresh(10)
-    sensor.temp_int_hi_hyst(29)                 ' hi/lo thresh hysteresis
-    sensor.temp_int_lo_hyst(7)
+    sensor.temp_int_hi_thresh(30_00)            ' temp hi/lo thresholds
+    sensor.temp_int_lo_thresh(10_00)
+    sensor.temp_int_hi_hyst(29_00)              ' hi/lo thresh hysteresis
+    sensor.temp_int_lo_hyst(7_00)
 
     ser.strln(@"Set thresholds:")
     ser.printf(@"RH Set low: %d  hi: %d\n\r",   sensor.rh_int_lo_thresh(), ...

@@ -5,7 +5,7 @@
         * Threshold interrupt functionality
     Author:         Jesse Burt
     Started:        Nov 19, 2017
-    Updated:        Aug 29, 2024
+    Updated:        Nov 13, 2024
     Copyright (c) 2024 - See end of file for terms of use.
 ----------------------------------------------------------------------------------------------------
 }
@@ -44,29 +44,28 @@ PUB main() | dr, temp, rh
     dr := 2                                     ' data rate: 0 (0.5), 1, 2, 4, 10Hz
 
     sensor.temp_scale(sensor.C)                 ' C, F
-    sensor.rh_int_hi_thresh(25)                 ' RH hi/lo thresholds
-    sensor.rh_int_lo_thresh(5)
-    sensor.rh_int_hi_hyst(24)                   ' hi/lo thresh hysteresis
-    sensor.rh_int_lo_hyst(6)
+    sensor.rh_int_hi_thresh(25_00)              ' RH hi/lo thresholds
+    sensor.rh_int_lo_thresh(5_00)
+    sensor.rh_int_hi_hyst(24_00)                ' hi/lo thresh hysteresis
+    sensor.rh_int_lo_hyst(6_00)
 
-    sensor.temp_int_hi_thresh(30)               ' temp hi/lo thresholds
-    sensor.temp_int_lo_thresh(10)
-    sensor.temp_int_hi_hyst(29)                 ' hi/lo thresh hysteresis
-    sensor.temp_int_lo_hyst(7)
+    sensor.temp_int_hi_thresh(30_00)            ' temp hi/lo thresholds
+    sensor.temp_int_lo_thresh(10_00)
+    sensor.temp_int_hi_hyst(29_00)              ' hi/lo thresh hysteresis
+    sensor.temp_int_lo_hyst(7_00)
 
     ser.strln(@"Set thresholds:")
-    ser.printf2(@"RH Set low: %d  hi: %d\n\r",  sensor.rh_int_lo_thresh(), ...
+    ser.printf(@"RH Set low: %d  hi: %d\n\r",   sensor.rh_int_lo_thresh(), ...
                                                 sensor.rh_int_hi_thresh())
 
-    ser.printf2(@"RH Clear low: %d  hi: %d\n\r",    sensor.rh_int_lo_hyst(), ...
-                                                    sensor.rh_int_hi_hyst())
+    ser.printf(@"RH Clear low: %d  hi: %d\n\r", sensor.rh_int_lo_hyst(), ...
+                                                sensor.rh_int_hi_hyst())
 
-    ser.printf2(@"Temp Set low: %d  hi: %d\n\r",    sensor.temp_int_lo_thresh(), ...
-                                                    sensor.temp_int_hi_thresh())
+    ser.printf(@"Temp Set low: %d  hi: %d\n\r", sensor.temp_int_lo_thresh(), ...
+                                                sensor.temp_int_hi_thresh())
 
-    ser.printf2(@"Temp Clear low: %d  hi: %d\n\r",  sensor.temp_int_lo_hyst(), ...
+    ser.printf(@"Temp Clear low: %d  hi: %d\n\r",   sensor.temp_int_lo_hyst(), ...
                                                     sensor.temp_int_hi_hyst())
-
     repeat
         if ( dr > 0 )
             time.msleep(1000/dr)
@@ -78,8 +77,8 @@ PUB main() | dr, temp, rh
 
         ser.pos_xy(0, 10)
 
-        ser.printf2(@"Temperature: %3.3d.%02.2d\n\r", (temp / 100), ||(temp // 100))
-        ser.printf2(@"Relative humidity: %3.3d.%02.2d%%\n\r", (rh / 100), (rh // 100))
+        ser.printf(@"Temperature: %3.3d.%02.2d\n\r", (temp / 100), ||(temp // 100))
+        ser.printf(@"Relative humidity: %3.3d.%02.2d%%\n\r", (rh / 100), (rh // 100))
 
         if ( _intflag )
             ser.pos_xy(0, 12)
